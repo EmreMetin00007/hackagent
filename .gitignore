@@ -22,7 +22,7 @@ dist/
 # ─── CCO çalışma zamanı veri dizinleri ─────────────────────
 .cco/             # CCO user data (logs, memory, rag, approvals)
 .hackeragent/     # legacy v3 dizini (geriye uyumluluk)
-.claude/          # legacy v2 dizini
+.claude.json      # Claude Code config (API key içerebilir)
 *.db
 *.sqlite
 *.sqlite3
