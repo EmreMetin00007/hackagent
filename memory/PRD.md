@@ -13,7 +13,7 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 - **Session modeli:** `qwen/qwen3-next-80b-a3b-instruct` (non-thinking, tool use uyumlu,
   alias `sonnet`). Thinking-only modeller (`qwen/qwen3.6-plus`) session modeli olarak
   çalışmaz (boş result döndürür); sadece MCP tool içinden programatik çağrıda kullanılır.
-- **6 MCP server** stdio transport ile subprocess olarak başlatılır
+- **10 MCP server** stdio transport ile subprocess olarak başlatılır (181 tool)
 - **Model delegation:** CLAUDE.md'de kurallar yazılı; Claude Code doğru tool'u seçer,
   tool'lar `os.environ.get("CCO_ANALYZE_MODEL", ...)` ile OpenRouter'a istek atar
 - **Veri:** `~/.cco/` altında SQLite (memory), ChromaDB (rag), logs, approvals
@@ -35,6 +35,48 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+
+### 2026-01-24 — Doküman Senkronu + osint/browser MCP Genişletme
+
+**Tetik:** Doküman-kod tutarsızlığı tespit edildi — README/CLAUDE.md "6 server,
+139+ tool, 7 skill" diyordu; gerçekte 10 server / 168 tool / 18 skill vardı.
+
+**1. MCP Tool Genişletme (#2 — osint-tools 2→9, browser 3→9):**
+- `mcp-osint-tools` (+7 yeni tool): `crtsh_subdomains` (CT log subdomain),
+  `dns_recon` (A/AAAA/MX/NS/TXT/CNAME/SOA + SPF/DMARC), `dns_zone_transfer`
+  (AXFR), `wayback_urls` (archive.org CDX), `rdap_whois` (API key'siz WHOIS),
+  `username_osint` (14 platform sherlock-tarzı), `github_code_search`
+  (GITHUB_TOKEN ile kod / token'sız repo araması)
+- `mcp-browser` (+6 yeni tool): `browser_extract_links` (saldırı yüzeyi),
+  `browser_security_headers` (CSP/HSTS/XFO), `browser_cookie_audit`
+  (HttpOnly/Secure/SameSite), `browser_capture_requests` (gizli API endpoint),
+  `browser_console_logs` (JS leak), `browser_dom_xss_probe` (canary reflection)
+- `mcp-osint-tools/requirements.txt` eklendi (mcp, requests, dnspython)
+
+**2. Yeni Skill (#2a):** `attack-surface-mapping` — pasif OSINT + client-side
+  recon metodolojisi; osint-tools + browser tool'larını 4 fazda zincirler
+  (DNS/CT → Wayback/GitHub → client-side → güvenlik konfig denetimi).
+  Toplam skill: 18 → 19.
+
+**3. Doküman Senkronu (#1c):**
+- `README.md`: 6→10 server, 139+→181 tool, 7→19 skill, mimari diyagramı,
+  dosya yapısı, server tablosu güncellendi
+- `CLAUDE.md`: MCP ekosistem tablosu (10 server/181 tool), Kural 1 skill listesi
+  (19 skill), protokol skill tetikleyici tablosu (19 satır)
+- `system_prompt.md`: MCP ekosistem tablosu 10 server'a güncellendi
+- `install-cco.sh`: kayıtsız 4 server (`ad-tools`, `container-tools`,
+  `osint-tools`, `browser`) `~/.claude.json` mcpServers'a eklendi; import test
+  loop'u 10 server'a genişletildi; sayaç mesajları güncellendi
+
+**Doğrulama:**
+- ✅ 10/10 server import OK (`mcp` paketi kuruldu)
+- ✅ `ruff check` — All checks passed (osint-tools, browser)
+- ✅ Fonksiyonel: `dns_recon`, `rdap_whois`, `username_osint` (8 platform) gerçek
+  veriyle çalıştı; `crtsh_subdomains`/`wayback_urls` graceful error handling
+  doğrulandı (crt.sh 502 / archive.org timeout — dış servis, kod doğru)
+- ✅ `browser` Playwright yoksa net hata mesajı döndürüyor (gated import)
+- ⚠️ Browser tool'larının canlı testi Playwright+chromium kurulumu gerektirir
+  (gerçek Kali'de `playwright install chromium` ile çalışır)
 
 ### 2026-01-23 — Migration MVP (Faz 0 → 3 tümü tek oturumda)
 - **Faz 0 — Test & Temizlik** (✅ TAMAMLANDI)

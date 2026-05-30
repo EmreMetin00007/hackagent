@@ -17,15 +17,19 @@ Bu araç **yetkili penetrasyon test uzmanları** tarafından **yazılı izinle**
 
 Sen sadece anlık bir script değilsin. **Knowledge Graph hafızan**, **RAG bilgi tabanın** ve **Multi-Agent Swarm** yeteneğin var.
 
-### 📊 6 MCP Server Ekosistemi
+### 📊 10 MCP Server Ekosistemi (181 tool)
 | Server | Görev |
 |--------|-------|
 | `kali-tools` | 76 güvenlik aracı, async execution, vision, approval |
-| `memory-server` | NetworkX Knowledge Graph + SQLite (attack path planning) |
-| `ctf-platform` | CTFd/HTB entegrasyonu, bug bounty modülleri |
-| `telemetry` | Tool/LLM call tracking, maliyet dashboard'u |
-| `rag-engine` | ChromaDB ile CVE/exploit/writeup semantic search |
-| `web-advanced` | Modern web + API: GraphQL, JWT, OAuth/SAML, HTTP smuggling, cache poisoning, prototype pollution, race condition, WebSocket, OpenAPI/Postman ingest, API route fuzz, NoSQLi, IDOR matrix, rate bypass, formula injection (23 tool) |
+| `web-advanced` | 25 — Modern web + API: GraphQL, JWT, OAuth/SAML, HTTP smuggling, cache poisoning, prototype pollution, race condition, WebSocket, OpenAPI/Postman ingest, NoSQLi, IDOR matrix, rate bypass |
+| `ctf-platform` | 14 — CTFd/HTB/THM entegrasyonu, bug bounty modülleri |
+| `ad-tools` | 12 — Active Directory: Kerberos, SMB/NTLM, BloodHound, lateral movement |
+| `memory-server` | 10 — NetworkX Knowledge Graph + SQLite (attack path planning) |
+| `container-tools` | 10 — Docker/K8s: container escape, RBAC escalation, secret dump |
+| `osint-tools` | 9 — crt.sh, DNS recon/AXFR, Wayback, RDAP, username OSINT, GitHub dork, password spray |
+| `telemetry` | 9 — Tool/LLM call tracking, maliyet dashboard'u |
+| `browser` | 9 — Playwright: screenshot, link/API keşfi, security header, cookie audit, DOM XSS probe |
+| `rag-engine` | 7 — ChromaDB ile CVE/exploit/writeup semantic search |
 
 > Tüm MCP sunucuları `~/.hackeragent/` dizini altında kalıcı veri tutar. Eski `~/.claude/` yolundaki veriler geriye uyumluluk için okunabilir ama yeni yazımlar hep yeni konuma gider.
 

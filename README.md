@@ -1,7 +1,7 @@
 # 🔴 CCO — Claude Code Offensive Operator
 
 > Otonom bug bounty avcısı & CTF çözücü. **Claude Code CLI** orkestrasyonu,
-> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **6 MCP server** ile 139+
+> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **10 MCP server** ile 181
 > güvenlik aracı. Kali Linux için.
 
 **v3.1 HackerAgent → v2.0 CCO geçişi:** 4.327 satır Python orkestrasyon kodu
@@ -22,11 +22,11 @@ chmod +x install-cco.sh
 
 `install-cco.sh` şunları yapar:
 - ✅ Kali güvenlik araçları (nmap, sqlmap, ffuf, nuclei, hashcat, john, ...)
-- ✅ Python MCP bağımlılıkları (mcp, chromadb, networkx, ...)
+- ✅ Python MCP bağımlılıkları (mcp, chromadb, networkx, dnspython, ...)
 - ✅ Claude Code CLI kurulumu (npm -g @anthropic-ai/claude-code)
 - ✅ `~/.cco/` veri dizini (DB, loglar, RAG, approvals)
 - ✅ `.env` dosyası (OpenRouter yönlendirmesi)
-- ✅ `~/.claude.json` — 6 MCP server kaydı (mevcut dosya yedeklenir)
+- ✅ `~/.claude.json` — 10 MCP server kaydı (mevcut dosya yedeklenir)
 
 ---
 
@@ -66,22 +66,25 @@ handle edilir ve modelden bağımsız olarak her zaman skill'i tetikler.
 │         Claude Code CLI                     │
 │  • Orkestrasyon, OODA loop, tool routing    │
 │  • CLAUDE.md → hacker persona + metodoloji  │
-│  • ~/.claude.json → 6 MCP server kaydı      │
+│  • ~/.claude.json → 10 MCP server kaydı     │
 └──────┬──────────────┬───────────────────────┘
        │              │
        ▼              ▼
 ┌────────────┐  ┌─────────────────────────────────┐
-│ OpenRouter │  │         MCP Server'lar          │
+│ OpenRouter │  │      MCP Server'lar (10)        │
 │   API      │  │  ┌──────────────────────────┐   │
 │            │  │  │ mcp-kali-tools  (76 tool) │   │
-│ Session:   │  │  │ mcp-memory-server        │   │
-│ qwen3-next │  │  │ mcp-ctf-platform         │   │
-│ 80b-a3b    │  │  │ mcp-web-advanced (23 tool)│   │
-│            │  │  │ mcp-rag-engine            │   │
-│ Tool içi:  │  │  │ mcp-telemetry             │   │
-│ qwen3.6+,  │  │  └──────────────────────────┘   │
-│ hermes-405 │  └─────────────────────────────────┘
-└────────────┘
+│ Session:   │  │  │ mcp-web-advanced (25 tool)│   │
+│ qwen3-next │  │  │ mcp-ctf-platform (14 tool)│   │
+│ 80b-a3b    │  │  │ mcp-ad-tools    (12 tool) │   │
+│            │  │  │ mcp-memory-srv  (10 tool) │   │
+│ Tool içi:  │  │  │ mcp-container   (10 tool) │   │
+│ qwen3.6+,  │  │  │ mcp-osint-tools  (9 tool) │   │
+│ hermes-405 │  │  │ mcp-telemetry    (9 tool) │   │
+│            │  │  │ mcp-browser      (9 tool) │   │
+│            │  │  │ mcp-rag-engine   (7 tool) │   │
+│            │  │  └──────────────────────────┘   │
+└────────────┘  └─────────────────────────────────┘
 ```
 
 ### Model Routing
@@ -118,24 +121,28 @@ cco/
 ├── install-cco.sh               ← Tek komut kurulum
 ├── README.md
 │
-├── mcp-servers/                 ← 6 MCP server (139+ tool)
+├── mcp-servers/                 ← 10 MCP server (181 tool)
 │   ├── mcp-kali-tools/          ← 76 güvenlik aracı + LLM tools
-│   ├── mcp-memory-server/       ← NetworkX Knowledge Graph + SQLite
-│   ├── mcp-ctf-platform/        ← CTFd/HTB/THM entegrasyonu
-│   ├── mcp-web-advanced/        ← 23 modern web/API saldırı aracı
-│   ├── mcp-rag-engine/          ← ChromaDB CVE/exploit/writeup search
-│   ├── mcp-telemetry/           ← Maliyet + call tracking
-│   └── mcp-browser/             ← Playwright (opsiyonel)
+│   ├── mcp-web-advanced/        ← 25 modern web/API saldırı aracı
+│   ├── mcp-ctf-platform/        ← 14 — CTFd/HTB/THM entegrasyonu
+│   ├── mcp-ad-tools/            ← 12 — Active Directory / Kerberos / SMB
+│   ├── mcp-memory-server/       ← 10 — NetworkX Knowledge Graph + SQLite
+│   ├── mcp-container-tools/     ← 10 — Docker/K8s container security
+│   ├── mcp-osint-tools/         ← 9 — pasif OSINT + password spraying
+│   ├── mcp-telemetry/           ← 9 — maliyet + call tracking
+│   ├── mcp-browser/             ← 9 — Playwright client-side recon (opsiyonel)
+│   └── mcp-rag-engine/          ← 7 — ChromaDB CVE/exploit/writeup search
 │
 ├── .claude/                     ← Claude Code native konfigürasyon
-│   └── skills/                  ← 7 Agent Skill (YAML frontmatter ile)
-│       ├── recon-enumeration/SKILL.md
-│       ├── web-exploit/SKILL.md
-│       ├── web-advanced/SKILL.md
-│       ├── binary-pwn/SKILL.md
-│       ├── crypto-forensics/SKILL.md
-│       ├── ctf-solver/SKILL.md
-│       └── report-generator/SKILL.md
+│   └── skills/                  ← 19 Agent Skill (YAML frontmatter ile)
+│       ├── recon-enumeration/         attack-surface-mapping/
+│       ├── web-exploit/  web-advanced/  advanced-api-sec/
+│       ├── binary-pwn/  crypto-forensics/  ctf-solver/
+│       ├── report-generator/  source-code-review/
+│       ├── active-directory/  windows-exploitation/
+│       ├── post-exploitation/  stealth-evasion/  payload-generation/
+│       ├── cloud-exploitation/  container-security/
+│       └── mobile-security/  osint-password-spraying/
 │
 ├── skills → .claude/skills      ← Geriye uyumluluk için symlink
 │
@@ -161,16 +168,24 @@ cco/
 
 ---
 
-## ⚙️ 6 MCP Server — 139+ Tool
+## ⚙️ 10 MCP Server — 181 Tool
 
-| Server | Tool Sayısı | Öne Çıkanlar |
+| Server | Tool | Öne Çıkanlar |
 |--------|---|--------------|
 | `kali-tools` | 76 | `nmap_scan_structured`, `sqlmap_test_structured`, `ffuf`, `nuclei`, `hydra`, `qwen_analyze`, `generate_exploit_poc`, `parallel_llm_analyze`, `swarm_dispatch`, `interactsh_*` |
-| `memory-server` | 12 | `store_finding`, `store_credential`, `query_attack_paths`, `suggest_next_action` |
-| `ctf-platform` | 15 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room` |
-| `web-advanced` | 23 | GraphQL injection, JWT attacks, OAuth/SAML, HTTP smuggling, cache poisoning, prototype pollution, WebSocket fuzz, IDOR matrix |
-| `rag-engine` | 6 | `rag_search`, `rag_add_cve`, `rag_add_writeup` |
-| `telemetry` | 8 | `log_tool_call`, `log_llm_call`, `cost_summary`, `savings_report` |
+| `web-advanced` | 25 | GraphQL injection, JWT attacks, OAuth/SAML, HTTP smuggling, cache poisoning, prototype pollution, WebSocket fuzz, IDOR matrix, `set_rate_limit` |
+| `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
+| `ad-tools` | 12 | Kerberos (AS-REP/Kerberoast), SMB enum, NTLM, BloodHound veri toplama |
+| `memory-server` | 10 | `store_finding`, `store_credential`, `query_attack_paths`, `suggest_next_action` |
+| `container-tools` | 10 | Container escape, K8s RBAC, secret dump, privileged pod, Helm analizi |
+| `osint-tools` | 9 | `crtsh_subdomains`, `dns_recon`, `dns_zone_transfer`, `wayback_urls`, `rdap_whois`, `username_osint`, `github_code_search`, `password_spray_structured` |
+| `telemetry` | 9 | `log_tool_call`, `log_llm_call`, `cost_summary`, `savings_report` |
+| `browser` | 9 | `browser_screenshot`, `browser_extract_links`, `browser_security_headers`, `browser_cookie_audit`, `browser_capture_requests`, `browser_console_logs`, `browser_dom_xss_probe` (Playwright) |
+| `rag-engine` | 7 | `rag_search`, `rag_add_cve`, `rag_add_writeup` (ChromaDB semantic search) |
+
+> Not: `ad-tools`, `container-tools`, `osint-tools`, `browser` artık
+> `install-cco.sh` tarafından `~/.claude.json`'a otomatik kaydedilir.
+> `browser` Playwright gerektirir (opsiyonel; yoksa net hata mesajı döner).
 
 ---
 
@@ -200,7 +215,7 @@ CCO_HOME=~/.cco
 ```
 
 ### `~/.claude.json` (install-cco.sh tarafından oluşturulur)
-6 MCP server'ın command/args/env tanımları. Mevcut dosya yedeklenir, sadece
+10 MCP server'ın command/args/env tanımları. Mevcut dosya yedeklenir, sadece
 `mcpServers` alanı güncellenir.
 
 ---
@@ -241,4 +256,4 @@ Bu sistem **yalnızca yasal ve etik** güvenlik testi amaçlarıyla kullanılmal
 ---
 
 *Developed for ethical security research and CTF competitions.*
-*4.327 lines of Python orchestration → 0. MCP tools: 139+. Model choices: unlimited.*
+*4.327 lines of Python orchestration → 0. MCP tools: 181 (10 server). Model choices: unlimited.*

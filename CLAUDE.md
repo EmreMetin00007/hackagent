@@ -21,13 +21,25 @@ ilgili görev tipinde **`Skill` tool'u** çağır. "Basit görev", "hızlı",
 ve doğru metodolojiyi enjekte eder.
 
 ```
-Skill({"skill": "recon-enumeration"})   # Keşif/port scan/OSINT
-Skill({"skill": "web-exploit"})          # SQLi/XSS/SSRF/LFI/SSTI/XXE/IDOR
-Skill({"skill": "web-advanced"})         # GraphQL/JWT/OAuth/smuggling
-Skill({"skill": "binary-pwn"})           # BOF/ROP/RE/pwn
-Skill({"skill": "crypto-forensics"})     # Hash/stego/PCAP/Volatility
-Skill({"skill": "ctf-solver"})           # Karma CTF / kategori belirsiz
-Skill({"skill": "report-generator"})     # Rapor/CVSS/writeup
+Skill({"skill": "recon-enumeration"})      # Keşif/port scan/OSINT
+Skill({"skill": "attack-surface-mapping"}) # Pasif OSINT + client-side recon
+Skill({"skill": "web-exploit"})            # SQLi/XSS/SSRF/LFI/SSTI/XXE/IDOR
+Skill({"skill": "web-advanced"})           # GraphQL/JWT/OAuth/smuggling
+Skill({"skill": "advanced-api-sec"})       # GraphQL/gRPC/REST/JWT derin API
+Skill({"skill": "binary-pwn"})             # BOF/ROP/RE/pwn
+Skill({"skill": "crypto-forensics"})       # Hash/stego/PCAP/Volatility
+Skill({"skill": "active-directory"})       # Kerberos/SMB/NTLM/BloodHound
+Skill({"skill": "windows-exploitation"})   # Token/LOLBAS/NTLM relay/DCSync
+Skill({"skill": "post-exploitation"})      # PrivEsc/lateral/exfiltration/LotL
+Skill({"skill": "cloud-exploitation"})     # AWS/GCP/Azure SSRF→IMDS/IAM
+Skill({"skill": "container-security"})     # Docker/K8s escape/RBAC
+Skill({"skill": "mobile-security"})        # Android/iOS APK/Frida/OWASP MASVS
+Skill({"skill": "source-code-review"})     # SAST/RCE/SQLi/hardcoded secret
+Skill({"skill": "payload-generation"})     # FUD payload/AMSI bypass/shellcode
+Skill({"skill": "stealth-evasion"})        # WAF/IPS/rate-limit bypass (OPSEC)
+Skill({"skill": "osint-password-spraying"})# E-posta toplama + password spray
+Skill({"skill": "ctf-solver"})             # Karma CTF / kategori belirsiz
+Skill({"skill": "report-generator"})       # Rapor/CVSS/writeup
 ```
 
 > **⚠️ KRİTİK:** `Skill` bir **TOOL**'dur. Metin olarak `"Skill({\"skill\":\"web-exploit\"})"`
@@ -89,10 +101,22 @@ mcp__kali-tools__parallel_llm_analyze(target, data, ...)
 | Görev türü | Tetikleyici (3 yol: Skill tool VEYA slash VEYA Read) |
 |------------|------------------------------------------------------|
 | Keşif, port scan, subdomain, OSINT | `Skill(skill="recon-enumeration")` veya `/recon-enumeration` |
+| Pasif OSINT + saldırı yüzeyi (crt.sh/wayback/DNS/github dork/client-side) | `Skill(skill="attack-surface-mapping")` veya `/attack-surface-mapping` |
 | Web zafiyet (SQLi/XSS/SSRF/LFI/SSTI/XXE/IDOR/deserialization/CSRF...) | `Skill(skill="web-exploit")` veya `/web-exploit` |
 | Modern web + API (GraphQL/JWT/OAuth/SAML/smuggling/cache poisoning/WebSocket) | `Skill(skill="web-advanced")` veya `/web-advanced` |
+| Derin API güvenliği (GraphQL/gRPC/REST/JWT — T1190) | `Skill(skill="advanced-api-sec")` veya `/advanced-api-sec` |
 | Binary exploit, RE, ROP, BOF, pwn, shellcode, Ghidra | `Skill(skill="binary-pwn")` veya `/binary-pwn` |
 | Kriptografi, hash crack, stego, forensics, PCAP, Volatility | `Skill(skill="crypto-forensics")` veya `/crypto-forensics` |
+| Active Directory (Kerberos/SMB/NTLM/BloodHound) | `Skill(skill="active-directory")` veya `/active-directory` |
+| Windows exploitation (token/LOLBAS/NTLM relay/DCSync) | `Skill(skill="windows-exploitation")` veya `/windows-exploitation` |
+| Post-exploit (privesc/lateral/exfiltration/LotL — TA0004/8/10) | `Skill(skill="post-exploitation")` veya `/post-exploitation` |
+| Cloud pentest (AWS/GCP/Azure SSRF→IMDS, IAM) | `Skill(skill="cloud-exploitation")` veya `/cloud-exploitation` |
+| Container/K8s güvenliği (escape/RBAC/secret) | `Skill(skill="container-security")` veya `/container-security` |
+| Mobil (Android/iOS APK/Frida/OWASP MASVS) | `Skill(skill="mobile-security")` veya `/mobile-security` |
+| Kaynak kod incelemesi (SAST/RCE/SQLi/secret) | `Skill(skill="source-code-review")` veya `/source-code-review` |
+| Payload üretimi (FUD/AMSI bypass/shellcode) | `Skill(skill="payload-generation")` veya `/payload-generation` |
+| Stealth/evasion (WAF/IPS/rate-limit bypass — TA0005) | `Skill(skill="stealth-evasion")` veya `/stealth-evasion` |
+| OSINT + password spraying (e-posta toplama, lockout'suz spray) | `Skill(skill="osint-password-spraying")` veya `/osint-password-spraying` |
 | Genel CTF challenge (kategori belirsiz / karma) | `Skill(skill="ctf-solver")` veya `/ctf-solver` |
 | Zafiyet raporu, CVSS, HackerOne/Bugcrowd format, writeup | `Skill(skill="report-generator")` veya `/report-generator` |
 
@@ -210,19 +234,23 @@ uygundur.
 
 ---
 
-## 🧩 MCP Araç Ekosistemi (164 tool toplam)
+## 🧩 MCP Araç Ekosistemi (181 tool, 10 server)
 
 | Server | Araçlar | Öne çıkanlar |
 |--------|---|--------------|
 | `kali-tools` | 76 | `nmap_scan_structured`, `sqlmap_test_structured`, `ffuf_scan`, `nuclei_scan`, `hydra_attack`, `qwen_analyze`, `generate_exploit_poc`, `parallel_llm_analyze`, `parallel_recon`, `swarm_dispatch`, `interactsh_*`, `request_approval` |
-| `memory-server` | 12 | `store_finding`, `store_credential`, `store_endpoint`, `query_attack_paths`, `suggest_next_action`, `add_relationship` |
-| `ctf-platform` | 15 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
-| `web-advanced` | 23 | GraphQL inj., JWT saldırı, OAuth/SAML, smuggling, cache poison, prototype pollution, WebSocket fuzz, IDOR matrix, set_rate_limit |
+| `web-advanced` | 25 | GraphQL inj., JWT saldırı, OAuth/SAML, smuggling, cache poison, prototype pollution, WebSocket fuzz, IDOR matrix, set_rate_limit |
+| `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
+| `ad-tools` | 12 | Kerberos (AS-REP roast/Kerberoast), SMB/NTLM enum, BloodHound veri toplama, lateral movement |
+| `memory-server` | 10 | `store_finding`, `store_credential`, `store_endpoint`, `query_attack_paths`, `suggest_next_action`, `add_relationship` |
+| `container-tools` | 10 | Container escape, K8s RBAC escalation, secret dump, privileged pod, Helm chart analizi |
+| `osint-tools` | 9 | `crtsh_subdomains`, `dns_recon`, `dns_zone_transfer`, `wayback_urls`, `rdap_whois`, `username_osint`, `github_code_search`, `gather_emails`, `password_spray_structured` |
+| `telemetry` | 9 | `log_tool_call`, `log_llm_call`, `cost_summary`, `savings_report` |
+| `browser` | 9 | `browser_screenshot`, `browser_extract_links`, `browser_capture_requests`, `browser_security_headers`, `browser_cookie_audit`, `browser_console_logs`, `browser_dom_xss_probe` (Playwright) |
 | `rag-engine` | 6 | `rag_search`, `rag_add_cve`, `rag_add_writeup` (ChromaDB semantic search) |
-| `telemetry` | 8 | `log_tool_call`, `log_llm_call`, `cost_summary`, `savings_report` |
 
 Tüm MCP sunucuları `~/.cco/` dizini altında kalıcı veri tutar (SQLite, ChromaDB,
-loglar, approvals).
+loglar, approvals). `browser` Playwright opsiyonel — yoksa net hata mesajı döner.
 
 ---
 
