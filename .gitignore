@@ -1,0 +1,75 @@
+# ─── Python & IDE artefaktları ─────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.DS_Store
+.venv/
+venv/
+env/
+.vscode/
+.idea/
+
+# ─── Paket build çıktıları ─────────────────────────────────
+*.egg-info/
+*.egg
+build/
+dist/
+
+# ─── CCO çalışma zamanı veri dizinleri ─────────────────────
+.cco/             # CCO user data (logs, memory, rag, approvals)
+.hackeragent/     # legacy v3 dizini (geriye uyumluluk)
+.claude.json      # Claude Code config (API key içerebilir)
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── Hassas environment / credential ───────────────────────
+.env
+.env.local
+.env.*
+!.env.example
+*.env
+credentials.json
+.credentials
+*.pem
+*.key
+
+# ─── Claude Code runtime/session kalıntıları ───────────────
+.claude.json
+.claude.json.bak.*
+/tmp/claude_test/
+
+# ─── Agent çalışma çıktıları ───────────────────────────────
+*.nmap
+*.gnmap
+*.xml
+loot/
+screenshots/
+challenge_files/
+
+# ─── Ad-hoc test script'leri ───────────────────────────────
+validate.py
+deep_audit.py
+idor_test.py
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials

@@ -1,0 +1,9 @@
+# Core — HTTP + MCP
+requests>=2.31
+mcp>=1.0
+
+# JWT / crypto saldırıları için
+pycryptodome>=3.19
+
+# OpenAPI YAML desteği (opsiyonel)
+PyYAML>=6.0
