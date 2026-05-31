@@ -3847,6 +3847,66 @@ def sqlmap_test_structured(
     return json.dumps(summary, indent=2, ensure_ascii=False)
 
 
+
+# ============================================================
+# TOOL GRUP FİLTRELEME — Token Tasarrufu (opsiyonel)
+# ============================================================
+# kali-tools 76 tool ile en büyük şema maliyetine sahip (~12K token/istek).
+# CCO_KALI_GROUPS env'i verilirse YALNIZCA o gruplar register kalır; geri
+# kalan tool'lar kaldırılır → context'e daha az şema yüklenir.
+# Profiller (scripts/cco-profile.sh) bunu görev tipine göre ayarlar.
+# Env verilmezse veya "all" ise tüm 76 tool yüklenir (varsayılan davranış korunur).
+#
+# Her tool TAM OLARAK bir gruba aittir (toplam 76):
+KALI_TOOL_GROUPS = {
+    # core — temel recon/scan/enum + kontrol (her zaman gerekli)
+    "nmap_scan": "core", "nmap_scan_structured": "core", "masscan_scan": "core",
+    "ffuf_fuzz": "core", "gobuster_scan": "core", "nuclei_scan": "core",
+    "nikto_scan": "core", "wpscan_scan": "core", "whatweb_fingerprint": "core",
+    "wafw00f_detect": "core", "dig_dns": "core", "whois_enrichment": "core",
+    "subfinder_enum": "core", "subdomain_takeover_check": "core", "curl_request": "core",
+    "netcat_connect": "core", "parallel_recon": "core", "kiterunner_scan": "core",
+    "gau_urls": "core", "waybackurls_fetch": "core", "file_analyze": "core",
+    "shell_exec": "core", "python_exec": "core", "request_approval": "core",
+    "check_approval": "core", "list_pending_approvals": "core", "approve_operation": "core",
+    "reject_operation": "core", "set_rate_limit": "core", "get_rate_limit_status": "core",
+    # osint — pasif/aktif istihbarat + cloud enum
+    "osint_harvest": "osint", "spiderfoot_scan": "osint", "sherlock_lookup": "osint",
+    "cloud_enum": "osint", "aws_security_check": "osint",
+    # web — web exploit + JS analizi + browser + OOB
+    "sqlmap_test": "web", "sqlmap_test_structured": "web", "linkfinder_scan": "web",
+    "secretfinder_scan": "web", "js_beautify": "web", "browser_crawl": "web",
+    "browser_auth_test": "web", "browser_dom_xss": "web", "mitmproxy_dump": "web",
+    "interactsh_start": "web", "interactsh_poll": "web", "interactsh_stop": "web",
+    # exploit — exploit arama/üretim + brute + C2 + secret scan
+    "searchsploit_search": "exploit", "metasploit_search": "exploit",
+    "ysoserial_generate": "exploit", "generate_exploit_poc": "exploit",
+    "hydra_brute": "exploit", "sliver_command": "exploit",
+    "gitleaks_scan": "exploit", "trufflehog_scan": "exploit",
+    # pwn — binary/RE/forensics/crypto-crack
+    "angr_analyze": "pwn", "ghidra_headless": "pwn", "frida_hook": "pwn",
+    "volatility_analyze": "pwn", "steghide_extract": "pwn", "steg_deep_analyze": "pwn",
+    "hashcat_crack": "pwn", "john_crack": "pwn",
+    # ad — Active Directory / internal
+    "bloodhound_collect": "ad", "enum4linux_scan": "ad", "impacket_tool": "ad",
+    # llm — LLM delegation + meta analiz
+    "qwen_analyze": "llm", "parallel_llm_analyze": "llm", "self_improve": "llm",
+    "screenshot_analyze": "llm",
+    # swarm — orkestrasyon / daemon
+    "swarm_dispatch": "swarm", "swarm_chain": "swarm",
+    "start_recon_daemon": "swarm", "stop_recon_daemon": "swarm",
+    # report — raporlama
+    "generate_pentest_report": "report", "cvss_calculate": "report",
+}
+
+_kali_groups_env = os.environ.get("CCO_KALI_GROUPS", "").strip()
+if _kali_groups_env and _kali_groups_env.lower() != "all":
+    _enabled_groups = {g.strip() for g in _kali_groups_env.split(",") if g.strip()}
+    for _tool_name in list(mcp._tool_manager._tools.keys()):
+        if KALI_TOOL_GROUPS.get(_tool_name, "core") not in _enabled_groups:
+            mcp.remove_tool(_tool_name)
+
+
 if __name__ == "__main__":
     import sys
     
