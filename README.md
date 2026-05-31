@@ -156,6 +156,7 @@ cco/
 ├── skills → .claude/skills      ← Geriye uyumluluk için symlink
 │
 ├── workflows/                   ← Metodoloji dokümanları
+│   ├── recon-to-exploit-workflow.md ← /pwn'in otonom zinciri
 │   ├── bug-bounty-workflow.md
 │   ├── ctf-workflow.md
 │   ├── modern-web-workflow.md
@@ -165,10 +166,17 @@ cco/
 │   ├── scope-guard.md
 │   └── safety-rules.md
 │
+├── tests/                       ← pytest smoke/regresyon suite
+│   ├── conftest.py
+│   └── test_mcp_servers.py      ← 11 server import + 187 tool sayım guard
+│
 ├── scripts/                     ← Yardımcılar
-│   ├── attack_planner.py
-│   ├── recon_daemon.py
-│   ├── swarm_orchestrator.py
+│   ├── cco-profile.sh           ← MCP profil değiştir (TOKEN TASARRUFU)
+│   ├── token-estimate.py        ← Profil token maliyeti tablosu
+│   ├── rag-bootstrap.py/.sh     ← RAG bilgi tabanı doldurma
+│   ├── recon_daemon.py          ← (kali-tools'a wired)
+│   ├── swarm_orchestrator.py    ← (kali-tools'a wired)
+│   ├── attack_planner.py        ← (standalone CLI — orphan, opsiyonel)
 │   ├── budget-check.sh          ← OpenRouter bakiye sorgu
 │   └── model-list.sh            ← Kullanılabilir modeller
 │
@@ -197,6 +205,50 @@ cco/
 > otomatik kaydedilir. `browser` Playwright gerektirir (opsiyonel; yoksa net
 > hata mesajı döner). `rag-engine` ilk kullanımda boştur — install sırasında
 > (veya `python3 scripts/rag-bootstrap.py` ile) CVE/ExploitDB/payload ile doldurulur.
+
+---
+
+## 💸 Token Tasarrufu — MCP Profilleri
+
+Claude Code **her istekte tüm kayıtlı MCP server'ların tool şemalarını** context'e
+yükler — 11 server / 187 tool ≈ **~28K token/istek** (sadece şema). Göreve göre
+yalnızca ilgili server'ları yükleyerek istek başına 10-20K token tasarruf edilir.
+
+```bash
+bash scripts/cco-profile.sh list      # profilleri + tahmini maliyeti gör
+bash scripts/cco-profile.sh llm       # sadece LLM-sec görevine geç (~8K, %71↓)
+bash scripts/cco-profile.sh recon     # keşif görevi (~17K, %37↓)
+bash scripts/cco-profile.sh full      # 11 server (varsayılan)
+python3 scripts/token-estimate.py     # server + profil token tablosu
+python3 scripts/token-estimate.py --current   # aktif profilin maliyeti
+```
+
+| Profil | Server | Tool | ~token/istek | Tasarruf |
+|--------|---|---|---|---|
+| `llm`   | 5 | 59 | ~8.2K  | **%71** |
+| `min`   | 3 | 95 | ~14.7K | %47 |
+| `ctf`   | 5 | 116 | ~17.3K | %38 |
+| `recon` | 5 | 113 | ~17.4K | %37 |
+| `ad`    | 5 | 117 | ~18.2K | %34 |
+| `web`   | 7 | 142 | ~21.2K | %24 |
+| `full`  | 11 | 187 | ~27.8K | %0 |
+
+> Profil değişikliği **yeni bir `claude` oturumunda** etkili olur. Mevcut config
+> (doldurulmuş token'lar dahil) korunur; yalnızca `mcpServers` alanı güncellenir.
+> Uzun oturumlarda ek tasarruf için Claude Code'un `/compact` komutunu kullan.
+
+---
+
+## 🧪 Test (regresyon)
+
+```bash
+pip install pytest
+pytest -q                    # 11 server import + 187 tool sayım guard'ı
+```
+
+`tests/test_mcp_servers.py` her server'ı import eder, tool sayısını doğrular
+(yeni tool eklerken `EXPECTED_TOOL_COUNTS` güncellenmeli) ve metadata + pure-function
+temel çağrılarını test eder. Tamamen offline çalışır.
 
 ---
 

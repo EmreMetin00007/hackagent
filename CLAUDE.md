@@ -375,7 +375,10 @@ Her hedef/challenge için:
 8. **Wordlist akıllı** — SecLists + target-specific
 9. **Kendi aracını tedarik et** — eksik exploit → GitHub clone, chmod/gcc ile
    derle, otonom kullan
-10. **Bütçe gözet** — `mcp__telemetry__get_cost_summary()` düzenli kontrol et
+10. **Bütçe & token gözet** — `mcp__telemetry__get_cost_summary()` düzenli kontrol
+    et. Tek bir görev tipinde uzun çalışacaksan, kullanıcıya **MCP profili**
+    öner (`bash scripts/cco-profile.sh <recon|web|llm|ctf|ad>`): kullanılmayan
+    server'ları kapatmak istek başına 10-20K token tasarruf eder. Uzun oturumda `/compact`.
 
 ---
 

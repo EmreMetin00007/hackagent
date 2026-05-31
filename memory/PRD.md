@@ -36,6 +36,30 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 
 ## What's Been Implemented
 
+### 2026-01-24 — pytest Smoke Suite + Token Tasarrufu (MCP Profilleri)
+
+**1. pytest regresyon suite (`tests/`):**
+- `test_mcp_servers.py` + `conftest.py`: 11 server import + `list_tools` + beklenen
+  tool sayısı guard'ı (`EXPECTED_TOOL_COUNTS`, toplam 187) + metadata + offline
+  pure-function temel çağrıları (llm-security payload/checklist, browser graceful).
+- İzole `CCO_HOME` (geçici dizin), tamamen offline. ✅ **38 passed, 1 skipped** (2.1s).
+- Yeni tool eklerken sayım tutmazsa test kasıtlı kırılır → regresyon yakalanır.
+
+**2. Token tasarrufu — MCP Profil sistemi (ölçülen sorun: ~28K token/istek):**
+- Tespit: Claude Code her istekte 11 server / 187 tool şemasını context'e yüklüyor
+  → ~27.769 token/istek (kali-tools tek başına %44). + CLAUDE.md ~5.6K.
+- `scripts/cco-profile.sh <profil>`: `~/.claude.json` mcpServers'ı göreve göre
+  alt kümeye indirir (min/recon/web/llm/ctf/ad/full). Mevcut config + doldurulmuş
+  token'lar korunur; backup alınır.
+- `scripts/token-estimate.py`: server + profil bazında token maliyeti tablosu;
+  `--current` ile aktif profil maliyeti.
+- ✅ Doğrulandı: `llm` profili 28K→**~8.2K (%71↓)**, `recon` ~17.4K (%37↓),
+  `ctf`/`ad`/`web` %24-38↓. Profil değişimi + diğer config key korunumu test edildi.
+- CLAUDE.md bütçe kuralına profil önerisi eklendi; install-cco.sh çıktısına ipucu.
+
+**Doküman:** README'ye "Token Tasarrufu — MCP Profilleri" + "Test" bölümleri,
+dosya yapısı (tests/, yeni scriptler) güncellendi.
+
 ### 2026-01-24 — LLM Security + RAG Bootstrap + Custom Commands + Tech Debt
 
 Kullanıcı seçimi: #1 (RAG bootstrap), #2 (AI/LLM security), #3 (custom commands),
