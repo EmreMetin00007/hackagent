@@ -144,6 +144,7 @@ yüksek seviye metodoloji içerir:
 
 | Senaryo | Dosya (Read ile çağır) |
 |---------|------------------------|
+| Recon → Exploit otomatik zincir (pasif OSINT'ten exploit'e) | `/app/workflows/recon-to-exploit-workflow.md` |
 | Bug bounty kampanyası | `/app/workflows/bug-bounty-workflow.md` |
 | CTF yarışması | `/app/workflows/ctf-workflow.md` |
 | Modern web/API | `/app/workflows/modern-web-workflow.md` |
@@ -205,9 +206,12 @@ Model seçimleri `.env` ile override edilir: `CCO_ANALYZE_MODEL`,
   zorunlu, onay gelmeden ACT yapma
 - **Credential dump / PII erişimi** → dosyaya YAZMA (sadece memory'e kaydet),
   sorumlu raporlama için `/report-generator` ile rapor üret
-- **Rate limiting:** bug bounty'de ZORUNLU `mcp__web-advanced__set_rate_limit(5)`
-  ile başla (ban koruması)
-- **Tor / proxy chain** — OPSEC gerektiren görevlerde `set_rate_limit(proxy=...)`
+- **Rate limiting / OPSEC:** bug bounty'de ban koruması için yavaş ve düşük
+  paralellikle çalış; `mcp__web-advanced__generate_stealth_curl(...)` ile
+  stealth istek üret ve `mcp__web-advanced__api_rate_bypass_probe(...)` ile
+  hedefin rate-limit davranışını ölç (istekler arası gecikme bırak)
+- **Tor / proxy chain** — OPSEC gerektiren görevlerde `generate_stealth_curl`
+  proxy parametresiyle çıkış IP'sini gizle
 - **Log at, iz bırakma disipline ol** — pentest'lerde süreç kaydı tut, CTF'de
   temizlik opsiyonel
 
@@ -239,13 +243,13 @@ uygundur.
 | Server | Araçlar | Öne çıkanlar |
 |--------|---|--------------|
 | `kali-tools` | 76 | `nmap_scan_structured`, `sqlmap_test_structured`, `ffuf_scan`, `nuclei_scan`, `hydra_attack`, `qwen_analyze`, `generate_exploit_poc`, `parallel_llm_analyze`, `parallel_recon`, `swarm_dispatch`, `interactsh_*`, `request_approval` |
-| `web-advanced` | 25 | GraphQL inj., JWT saldırı, OAuth/SAML, smuggling, cache poison, prototype pollution, WebSocket fuzz, IDOR matrix, set_rate_limit |
+| `web-advanced` | 25 | GraphQL inj., JWT saldırı, OAuth/SAML, smuggling, cache poison, prototype pollution, WebSocket fuzz, IDOR matrix, generate_stealth_curl |
 | `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
 | `ad-tools` | 12 | Kerberos (AS-REP roast/Kerberoast), SMB/NTLM enum, BloodHound veri toplama, lateral movement |
 | `memory-server` | 10 | `store_finding`, `store_credential`, `store_endpoint`, `query_attack_paths`, `suggest_next_action`, `add_relationship` |
 | `container-tools` | 10 | Container escape, K8s RBAC escalation, secret dump, privileged pod, Helm chart analizi |
 | `osint-tools` | 9 | `crtsh_subdomains`, `dns_recon`, `dns_zone_transfer`, `wayback_urls`, `rdap_whois`, `username_osint`, `github_code_search`, `gather_emails`, `password_spray_structured` |
-| `telemetry` | 9 | `log_tool_call`, `log_llm_call`, `cost_summary`, `savings_report` |
+| `telemetry` | 9 | `log_tool_call`, `log_llm_call`, `get_cost_summary`, `get_savings_report`, `get_metrics_dashboard` |
 | `browser` | 9 | `browser_screenshot`, `browser_extract_links`, `browser_capture_requests`, `browser_security_headers`, `browser_cookie_audit`, `browser_console_logs`, `browser_dom_xss_probe` (Playwright) |
 | `rag-engine` | 6 | `rag_search`, `rag_add_cve`, `rag_add_writeup` (ChromaDB semantic search) |
 
@@ -315,7 +319,8 @@ js_beautify(js_url, grep)       → pattern ara
 
 ### OPSEC
 ```
-set_rate_limit(rps, proxy)      → bug bounty'de ZORUNLU başlangıç (rps=5)
+generate_stealth_curl(...)      → stealth/yavaş istek üret (ban koruması)
+api_rate_bypass_probe(...)      → hedefin rate-limit davranışını ölç
 subdomain_takeover_check        → 30+ servis dangling CNAME
 ```
 
@@ -367,7 +372,7 @@ Her hedef/challenge için:
 8. **Wordlist akıllı** — SecLists + target-specific
 9. **Kendi aracını tedarik et** — eksik exploit → GitHub clone, chmod/gcc ile
    derle, otonom kullan
-10. **Bütçe gözet** — `mcp__telemetry__cost_summary()` düzenli kontrol et
+10. **Bütçe gözet** — `mcp__telemetry__get_cost_summary()` düzenli kontrol et
 
 ---
 
@@ -384,7 +389,7 @@ Her hedef/challenge için:
 | Session içinde `/model` ile model değiştirme | MCP tool delegation: `qwen_analyze`, `generate_exploit_poc`, `parallel_llm_analyze` |
 | Memory'e kayıt yapmadan ilerleme | Her finding'de `mcp__memory-server__store_finding` — test edildi, Knowledge Graph otomatik güncelleniyor |
 | Workflow'u hafızadan çözmeye çalışmak | `Read('/app/workflows/<name>.md')` ile explicit oku |
-| Bug bounty'de rate limit olmadan tarama | İlk adım: `mcp__web-advanced__set_rate_limit(5)` |
+| Bug bounty'de OPSEC'siz agresif tarama | Yavaş+düşük paralellik; `generate_stealth_curl` + `api_rate_bypass_probe` ile ölç |
 | Thinking-only modeli session olarak kullanmak | `qwen/qwen3.6-plus` sadece MCP tool içi — session için `qwen3-next-80b-a3b-instruct` (non-thinking, varsayılan) |
 | Eksik tool varsa (sqlmap/nuclei yok) hemen pes etmek | `curl` + manuel payload ile fallback yap; `generate_exploit_poc` ile custom exploit üret |
 

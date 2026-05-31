@@ -36,6 +36,27 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 
 ## What's Been Implemented
 
+### 2026-01-24 — Recon→Exploit Zincir Workflow + set_rate_limit Düzeltmesi
+
+**1. Yeni workflow:** `workflows/recon-to-exploit-workflow.md` — pasif keşiften
+  (attack-surface-mapping) aktif keşfe (recon-enumeration) ve exploit'e
+  (web-exploit/web-advanced) otomatik zincir. Köprü = `memory-server` Knowledge
+  Graph (her faz `store_*` yazar, sonraki faz `query_attack_paths`/
+  `suggest_next_action` okur). 6 faz + akış şeması + sürekli döngü kuralı.
+  CLAUDE.md workflow tablosuna kaydedildi.
+- ✅ Workflow'daki 34 `mcp__*` tool referansının tamamı gerçek inventory ile
+  doğrulandı (0 hayalî tool).
+
+**2. `set_rate_limit` doküman hatası düzeltildi:** Bu tool gerçekte hiçbir
+  server'da YOK ama README/CLAUDE.md/system_prompt.md/modern-web-workflow.md/
+  stealth-evasion'da referans veriliyordu. Gerçek OPSEC tool'larıyla
+  değiştirildi: `generate_stealth_curl` + `api_rate_bypass_probe` (web-advanced).
+  Tüm 5 dosyadaki referanslar temizlendi.
+
+**3. Telemetry tool adı düzeltmesi:** `cost_summary`/`savings_report` →
+  gerçek adlar `get_cost_summary`/`get_savings_report`/`get_metrics_dashboard`
+  (README, CLAUDE.md, workflow).
+
 ### 2026-01-24 — Doküman Senkronu + osint/browser MCP Genişletme
 
 **Tetik:** Doküman-kod tutarsızlığı tespit edildi — README/CLAUDE.md "6 server,

@@ -375,12 +375,13 @@ Gizli API endpoint, secret, internal URL keşfi için:
 - `subdomain_takeover_check(domain)` → Dangling CNAME tespiti, 30+ servis kontrolü
 
 ### Rate Limiting & OPSEC
-- `set_rate_limit(rps, proxy)` → Saniyedeki istek limiti, Tor/proxy desteği
-- Bug bounty'de **MUTLAKA** `set_rate_limit(5)` ile başla
+- `generate_stealth_curl(rps, proxy)` → stealth/yavaş istek üret (Tor/proxy desteği)
+- `api_rate_bypass_probe(...)` → hedefin rate-limit davranışını ölç
+- Bug bounty'de **MUTLAKA** yavaş + düşük paralellikle başla (ban koruması)
 
 ### Bug Bounty Workflow Güncellemesi
 ```
-1. set_rate_limit(5) ile başla (ban koruması)
+1. generate_stealth_curl ile yavaş/stealth istek (ban koruması)
 2. browser_crawl(url) → JS rendered keşif
 3. linkfinder_scan() → Her JS dosyasını analiz et  
 4. secretfinder_scan() → Secret taraması

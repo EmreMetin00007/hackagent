@@ -211,7 +211,7 @@ report-generator.generate_hackerone_report(target="target.com")
 
 ## ⚠️ OPSEC Notları
 
-1. **Rate limit**: `set_rate_limit(5)` ile başla (bug bounty mantığı)
+1. **Rate limit / OPSEC**: yavaş + düşük paralellikle başla; `generate_stealth_curl` + `api_rate_bypass_probe` kullan (bug bounty mantığı)
 2. **Scope**: `/scope list` ile her tool öncesi kontrol et
 3. **Batch sizing**: `graphql_batch_attack(batch_size=50)` — 500+ server crash
 4. **Race testing**: Üretim/checkout endpoint'lerinde dikkat (gerçek işlem tetiklenir)
