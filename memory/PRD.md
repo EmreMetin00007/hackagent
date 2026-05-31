@@ -13,7 +13,7 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 - **Session modeli:** `qwen/qwen3-next-80b-a3b-instruct` (non-thinking, tool use uyumlu,
   alias `sonnet`). Thinking-only modeller (`qwen/qwen3.6-plus`) session modeli olarak
   çalışmaz (boş result döndürür); sadece MCP tool içinden programatik çağrıda kullanılır.
-- **10 MCP server** stdio transport ile subprocess olarak başlatılır (181 tool)
+- **11 MCP server** stdio transport ile subprocess olarak başlatılır (187 tool)
 - **Model delegation:** CLAUDE.md'de kurallar yazılı; Claude Code doğru tool'u seçer,
   tool'lar `os.environ.get("CCO_ANALYZE_MODEL", ...)` ile OpenRouter'a istek atar
 - **Veri:** `~/.cco/` altında SQLite (memory), ChromaDB (rag), logs, approvals
@@ -35,6 +35,50 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+
+### 2026-01-24 — LLM Security + RAG Bootstrap + Custom Commands + Tech Debt
+
+Kullanıcı seçimi: #1 (RAG bootstrap), #2 (AI/LLM security), #3 (custom commands),
+#8 (teknik borç). 4 başlık da tamamlandı.
+
+**#1 — RAG bootstrap wiring (atıl alt sistemi aktive etti):**
+- `rag-engine` (7 tool) boş başlıyordu; `scripts/rag-bootstrap.py` (488 satır,
+  NVD CVE + ExploitDB + PayloadsAllTheThings ingester) yazılmış ama hiç çağrılmıyordu.
+- `install-cco.sh`'a PHASE 8 eklendi: opsiyonel RAG bootstrap (`CCO_RAG_BOOTSTRAP=1`
+  ile otomatik veya interaktif y/N; network'te asmamak için default skip).
+- ✅ Doğrulandı: path eşleşiyor (`CCO_HOME/rag_db`), `--dry-run` NVD'ye erişti
+  (354K CVE), `--seed-only` 13 CVE yazdı, `rag-engine.rag_search` AYNI DB'den
+  semantic search ile okudu (relevance skorlu) — uçtan uca çalışıyor.
+
+**#2 — AI/LLM Güvenliği (yeni domain, sette hiç yoktu):**
+- Yeni server `mcp-llm-security` (6 tool): `llm_prompt_injection_probe` (LLM01),
+  `llm_system_prompt_leak` (LLM07), `llm_jailbreak_test`, `llm_data_leak_probe`
+  (LLM02), `generate_injection_payloads`, `llm_owasp_top10_checklist`.
+- Hedef LLM endpoint'ine HTTP probe atar (`{{PROMPT}}` body template); kendi
+  tarafımızda LLM key gerekmez. Zararsız canary/sentinel kullanır.
+- Yeni skill `llm-security` (OWASP LLM Top 10 2025 metodolojisi).
+- ✅ Doğrulandı: zafiyetli mock'ta injection 6/6, leak 6, jailbreak 5/5 tespit;
+  güvenli mock'ta 0 false-positive.
+
+**#3 — Custom slash command'lar (`.claude/commands/` ilk kez):**
+- `/pwn <hedef>` → recon-to-exploit-workflow'u otonom yürütür (attack-surface →
+  recon → exploit → rapor; scope + approval kullanıcıda).
+- `/bugbounty <hedef>` → bug-bounty-workflow (OPSEC + ödül optimizasyonu).
+- Format: `.claude/commands/<isim>.md` + `$ARGUMENTS` (web ile teyit edildi).
+
+**#8 — Teknik borç:**
+- Eksik `requirements.txt` eklendi: `mcp-ad-tools`, `mcp-osint-tools`
+  (`mcp-container-tools`'da zaten vardı).
+- `attack_planner.py` durumu netleşti: **orphan** (307 satır, hiçbir yerden
+  çağrılmıyor; memory-server'ın `query_attack_paths`/`suggest_next_action` graph
+  motoruyla fonksiyonel olarak çakışıyor). Standalone analiz CLI'si olarak
+  bırakıldı — silinmedi; PRD'de durumu belgelendi. (`recon_daemon.py` ve
+  `swarm_orchestrator.py` ise kali-tools'a wired ✅.)
+
+**Doküman senkronu:** README, CLAUDE.md, system_prompt.md → 11 server / 187 tool /
+20 skill / 2 command. install-cco.sh → llm-security kaydı + import loop + RAG fazı.
+
+**Toplam:** 10→11 server, 181→187 tool, 19→20 skill, 0→2 custom command.
 
 ### 2026-01-24 — Recon→Exploit Zincir Workflow + set_rate_limit Düzeltmesi
 

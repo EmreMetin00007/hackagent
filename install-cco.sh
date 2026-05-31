@@ -1,7 +1,7 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
 #   🔴 CCO — Claude Code Offensive Operator
-#   Kali Linux + OpenRouter + 10 MCP Server — Tek Komut Kurulum
+#   Kali Linux + OpenRouter + 11 MCP Server — Tek Komut Kurulum
 # ═══════════════════════════════════════════════════════════════
 # Kullanım:
 #   git clone https://github.com/EmreMetin00007/AgentCracker.git cco
@@ -15,7 +15,7 @@
 #   3. Claude Code CLI'ı kurar (npm -g @anthropic-ai/claude-code)
 #   4. ~/.cco veri dizinini oluşturur
 #   5. OpenRouter API key'ini .env dosyasına kaydeder
-#   6. ~/.claude.json'a 10 MCP server'ı kaydeder (mevcut dosya yedeklenir)
+#   6. ~/.claude.json'a 11 MCP server'ı kaydeder (mevcut dosya yedeklenir)
 #   7. system_prompt.md → CLAUDE.md'ye kopyalar (yoksa)
 
 set -e
@@ -279,13 +279,18 @@ mcp_servers = {
         "command": "python3",
         "args": ["$CCO_DIR/mcp-servers/mcp-browser/server.py"],
         "env": {"CCO_HOME": "$CCO_DATA_DIR"}
+    },
+    "llm-security": {
+        "command": "python3",
+        "args": ["$CCO_DIR/mcp-servers/mcp-llm-security/server.py"],
+        "env": {"CCO_HOME": "$CCO_DATA_DIR"}
     }
 }
 
 existing["mcpServers"] = mcp_servers
 with open(path, "w") as f:
     json.dump(existing, f, indent=2)
-print(f"  ✓ 10 MCP server kaydedildi → {path}")
+print(f"  ✓ 11 MCP server kaydedildi → {path}")
 PYEOF
 
 if [ "$EUID" -eq 0 ] && [ "$REAL_USER" != "root" ]; then
@@ -305,7 +310,7 @@ fi
 
 # Test importları
 echo -e "${C}  → MCP server import testleri...${N}"
-for srv in kali-tools memory-server telemetry rag-engine ctf-platform web-advanced ad-tools container-tools osint-tools browser; do
+for srv in kali-tools memory-server telemetry rag-engine ctf-platform web-advanced ad-tools container-tools osint-tools browser llm-security; do
   pyfile="$CCO_DIR/mcp-servers/mcp-$srv/server.py"
   if [ -f "$pyfile" ]; then
     if python3 -c "
@@ -323,6 +328,28 @@ except Exception as e:
     fi
   fi
 done
+
+# ═══════════════════════════════════════════════════════════════
+# 8. RAG BİLGİ TABANI BOOTSTRAP (opsiyonel)
+# ═══════════════════════════════════════════════════════════════
+# rag-engine boş başlar; rag_search anlamlı sonuç dönmesi için CVE/ExploitDB/
+# PayloadsAllTheThings ile doldurulmalı. Network gerektirdiği ve uzun sürebildiği
+# için opsiyonel: CCO_RAG_BOOTSTRAP=1 ile otomatik, yoksa interaktif sorulur.
+echo ""
+echo -e "${C}━━━ [8] RAG bilgi tabanı bootstrap (opsiyonel) ━━━${N}"
+RAG_BOOTSTRAP="${CCO_RAG_BOOTSTRAP:-}"
+if [ -z "$RAG_BOOTSTRAP" ] && [ -t 0 ]; then
+  read -r -p "  RAG'ı CVE/ExploitDB/payload ile şimdi doldur? (network gerekir) [y/N] " ans
+  case "$ans" in [Yy]*) RAG_BOOTSTRAP=1 ;; *) RAG_BOOTSTRAP=0 ;; esac
+fi
+if [ "$RAG_BOOTSTRAP" = "1" ]; then
+  echo -e "${C}  → rag-bootstrap.py çalışıyor (CVE + payloads)...${N}"
+  CCO_HOME="$CCO_DATA_DIR" python3 "$CCO_DIR/scripts/rag-bootstrap.py" --cve-count 200 \
+    && echo -e "${G}    ✓ RAG dolduruldu — rag_search artık aktif${N}" \
+    || echo -e "${Y}    ⚠ RAG bootstrap kısmen/başarısız (sonra: bash scripts/rag-bootstrap.sh)${N}"
+else
+  echo -e "${Y}  ⊘ Atlandı. Sonra doldurmak için: ${B}CCO_HOME=$CCO_DATA_DIR python3 scripts/rag-bootstrap.py${N}"
+fi
 
 echo ""
 echo -e "${R}╔═══════════════════════════════════════════════╗${N}"

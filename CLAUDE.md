@@ -26,6 +26,7 @@ Skill({"skill": "attack-surface-mapping"}) # Pasif OSINT + client-side recon
 Skill({"skill": "web-exploit"})            # SQLi/XSS/SSRF/LFI/SSTI/XXE/IDOR
 Skill({"skill": "web-advanced"})           # GraphQL/JWT/OAuth/smuggling
 Skill({"skill": "advanced-api-sec"})       # GraphQL/gRPC/REST/JWT derin API
+Skill({"skill": "llm-security"})            # Prompt injection/jailbreak/OWASP LLM
 Skill({"skill": "binary-pwn"})             # BOF/ROP/RE/pwn
 Skill({"skill": "crypto-forensics"})       # Hash/stego/PCAP/Volatility
 Skill({"skill": "active-directory"})       # Kerberos/SMB/NTLM/BloodHound
@@ -105,6 +106,7 @@ mcp__kali-tools__parallel_llm_analyze(target, data, ...)
 | Web zafiyet (SQLi/XSS/SSRF/LFI/SSTI/XXE/IDOR/deserialization/CSRF...) | `Skill(skill="web-exploit")` veya `/web-exploit` |
 | Modern web + API (GraphQL/JWT/OAuth/SAML/smuggling/cache poisoning/WebSocket) | `Skill(skill="web-advanced")` veya `/web-advanced` |
 | Derin API güvenliği (GraphQL/gRPC/REST/JWT — T1190) | `Skill(skill="advanced-api-sec")` veya `/advanced-api-sec` |
+| AI/LLM uygulama güvenliği (prompt injection/jailbreak/system prompt leak — OWASP LLM Top 10) | `Skill(skill="llm-security")` veya `/llm-security` |
 | Binary exploit, RE, ROP, BOF, pwn, shellcode, Ghidra | `Skill(skill="binary-pwn")` veya `/binary-pwn` |
 | Kriptografi, hash crack, stego, forensics, PCAP, Volatility | `Skill(skill="crypto-forensics")` veya `/crypto-forensics` |
 | Active Directory (Kerberos/SMB/NTLM/BloodHound) | `Skill(skill="active-directory")` veya `/active-directory` |
@@ -238,11 +240,11 @@ uygundur.
 
 ---
 
-## 🧩 MCP Araç Ekosistemi (181 tool, 10 server)
+## 🧩 MCP Araç Ekosistemi (187 tool, 11 server)
 
 | Server | Araçlar | Öne çıkanlar |
 |--------|---|--------------|
-| `kali-tools` | 76 | `nmap_scan_structured`, `sqlmap_test_structured`, `ffuf_scan`, `nuclei_scan`, `hydra_attack`, `qwen_analyze`, `generate_exploit_poc`, `parallel_llm_analyze`, `parallel_recon`, `swarm_dispatch`, `interactsh_*`, `request_approval` |
+| `kali-tools` | 76 | `nmap_scan_structured`, `sqlmap_test_structured`, `ffuf_fuzz`, `nuclei_scan`, `hydra_attack`, `qwen_analyze`, `generate_exploit_poc`, `parallel_llm_analyze`, `parallel_recon`, `swarm_dispatch`, `interactsh_*`, `request_approval` |
 | `web-advanced` | 25 | GraphQL inj., JWT saldırı, OAuth/SAML, smuggling, cache poison, prototype pollution, WebSocket fuzz, IDOR matrix, generate_stealth_curl |
 | `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
 | `ad-tools` | 12 | Kerberos (AS-REP roast/Kerberoast), SMB/NTLM enum, BloodHound veri toplama, lateral movement |
@@ -251,7 +253,8 @@ uygundur.
 | `osint-tools` | 9 | `crtsh_subdomains`, `dns_recon`, `dns_zone_transfer`, `wayback_urls`, `rdap_whois`, `username_osint`, `github_code_search`, `gather_emails`, `password_spray_structured` |
 | `telemetry` | 9 | `log_tool_call`, `log_llm_call`, `get_cost_summary`, `get_savings_report`, `get_metrics_dashboard` |
 | `browser` | 9 | `browser_screenshot`, `browser_extract_links`, `browser_capture_requests`, `browser_security_headers`, `browser_cookie_audit`, `browser_console_logs`, `browser_dom_xss_probe` (Playwright) |
-| `rag-engine` | 6 | `rag_search`, `rag_add_cve`, `rag_add_writeup` (ChromaDB semantic search) |
+| `rag-engine` | 7 | `rag_search`, `rag_similar_exploits`, `rag_ingest_cve`, `rag_ingest_exploitdb`, `rag_bulk_ingest`, `rag_stats` (ChromaDB; install'da bootstrap edilir) |
+| `llm-security` | 6 | `llm_prompt_injection_probe`, `llm_system_prompt_leak`, `llm_jailbreak_test`, `llm_data_leak_probe`, `generate_injection_payloads`, `llm_owasp_top10_checklist` (OWASP LLM Top 10 2025) |
 
 Tüm MCP sunucuları `~/.cco/` dizini altında kalıcı veri tutar (SQLite, ChromaDB,
 loglar, approvals). `browser` Playwright opsiyonel — yoksa net hata mesajı döner.
@@ -423,8 +426,13 @@ Her hedef/challenge için:
 ```bash
 # İnteraktif REPL içinde
 $ claude
+# Custom slash command'lar (.claude/commands/) — tek komutla otonom zincir:
+> /pwn hedef.com scope: hedef.com          # recon→exploit→rapor (otonom)
+> /bugbounty hedef.com                      # bug bounty kampanyası
+# Skill slash command'lar:
 > /recon-enumeration 10.10.11.42
 > /web-exploit testphp.vulnweb.com/search.php?test=query
+> /llm-security https://hedef.com/api/chat  # AI/LLM uygulama güvenliği
 > /ctf-solver picoCTF Binary Exploitation
 > /binary-pwn /challenges/pwn/binary.elf
 > /report-generator
@@ -432,6 +440,10 @@ $ claude
 # Tek komut (headless)
 $ claude -p "/web-exploit example.com sqli kontrolü yap"
 ```
+
+> **`/pwn` ve `/bugbounty` custom command'lardır** (`.claude/commands/*.md`),
+> skill DEĞİL. Workflow'u baştan sona otonom yürütürler; kullanıcı yalnızca
+> scope tanımlar ve kritik adımlarda onay verir.
 
 ### REPL'de kullanım
 

@@ -1,7 +1,7 @@
 # 🔴 CCO — Claude Code Offensive Operator
 
 > Otonom bug bounty avcısı & CTF çözücü. **Claude Code CLI** orkestrasyonu,
-> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **10 MCP server** ile 181
+> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **11 MCP server** ile 187
 > güvenlik aracı. Kali Linux için.
 
 **v3.1 HackerAgent → v2.0 CCO geçişi:** 4.327 satır Python orkestrasyon kodu
@@ -26,7 +26,8 @@ chmod +x install-cco.sh
 - ✅ Claude Code CLI kurulumu (npm -g @anthropic-ai/claude-code)
 - ✅ `~/.cco/` veri dizini (DB, loglar, RAG, approvals)
 - ✅ `.env` dosyası (OpenRouter yönlendirmesi)
-- ✅ `~/.claude.json` — 10 MCP server kaydı (mevcut dosya yedeklenir)
+- ✅ `~/.claude.json` — 11 MCP server kaydı (mevcut dosya yedeklenir)
+- ✅ (opsiyonel) RAG bilgi tabanını CVE/ExploitDB/payload ile doldurma
 
 ---
 
@@ -41,8 +42,11 @@ claude
 İlk komutlar (slash command'la başlamak en garantili yol):
 ```
 > /tools                                         # Tüm MCP araçlarını listele
+> /pwn hedef.com scope: hedef.com                # Otonom recon→exploit zinciri (tek komut)
+> /bugbounty hedef.com                           # Bug bounty kampanyası
 > /recon-enumeration scanme.nmap.org             # Keşif skill'ini tetikle
 > /web-exploit testphp.vulnweb.com/?test=query   # Web zafiyet skill'i
+> /llm-security https://hedef.com/api/chat       # LLM/AI uygulama güvenliği
 > /ctf-solver picoCTF Binary Exploitation        # CTF orkestratör
 > 10.10.10.10 hedefini tara                      # Doğal dil de çalışır
 ```
@@ -66,12 +70,12 @@ handle edilir ve modelden bağımsız olarak her zaman skill'i tetikler.
 │         Claude Code CLI                     │
 │  • Orkestrasyon, OODA loop, tool routing    │
 │  • CLAUDE.md → hacker persona + metodoloji  │
-│  • ~/.claude.json → 10 MCP server kaydı     │
+│  • ~/.claude.json → 11 MCP server kaydı     │
 └──────┬──────────────┬───────────────────────┘
        │              │
        ▼              ▼
 ┌────────────┐  ┌─────────────────────────────────┐
-│ OpenRouter │  │      MCP Server'lar (10)        │
+│ OpenRouter │  │      MCP Server'lar (11)        │
 │   API      │  │  ┌──────────────────────────┐   │
 │            │  │  │ mcp-kali-tools  (76 tool) │   │
 │ Session:   │  │  │ mcp-web-advanced (25 tool)│   │
@@ -83,6 +87,7 @@ handle edilir ve modelden bağımsız olarak her zaman skill'i tetikler.
 │ hermes-405 │  │  │ mcp-telemetry    (9 tool) │   │
 │            │  │  │ mcp-browser      (9 tool) │   │
 │            │  │  │ mcp-rag-engine   (7 tool) │   │
+│            │  │  │ mcp-llm-security (6 tool) │   │
 │            │  │  └──────────────────────────┘   │
 └────────────┘  └─────────────────────────────────┘
 ```
@@ -121,7 +126,7 @@ cco/
 ├── install-cco.sh               ← Tek komut kurulum
 ├── README.md
 │
-├── mcp-servers/                 ← 10 MCP server (181 tool)
+├── mcp-servers/                 ← 11 MCP server (187 tool)
 │   ├── mcp-kali-tools/          ← 76 güvenlik aracı + LLM tools
 │   ├── mcp-web-advanced/        ← 25 modern web/API saldırı aracı
 │   ├── mcp-ctf-platform/        ← 14 — CTFd/HTB/THM entegrasyonu
@@ -131,11 +136,15 @@ cco/
 │   ├── mcp-osint-tools/         ← 9 — pasif OSINT + password spraying
 │   ├── mcp-telemetry/           ← 9 — maliyet + call tracking
 │   ├── mcp-browser/             ← 9 — Playwright client-side recon (opsiyonel)
-│   └── mcp-rag-engine/          ← 7 — ChromaDB CVE/exploit/writeup search
+│   ├── mcp-rag-engine/          ← 7 — ChromaDB CVE/exploit/writeup search
+│   └── mcp-llm-security/        ← 6 — OWASP LLM Top 10 (prompt inj./jailbreak)
 │
 ├── .claude/                     ← Claude Code native konfigürasyon
-│   └── skills/                  ← 19 Agent Skill (YAML frontmatter ile)
-│       ├── recon-enumeration/         attack-surface-mapping/
+│   ├── commands/                ← Custom slash command'lar
+│   │   ├── pwn.md               ←   /pwn <hedef> — otonom recon→exploit zinciri
+│   │   └── bugbounty.md         ←   /bugbounty <hedef> — bug bounty kampanyası
+│   └── skills/                  ← 20 Agent Skill (YAML frontmatter ile)
+│       ├── recon-enumeration/  attack-surface-mapping/  llm-security/
 │       ├── web-exploit/  web-advanced/  advanced-api-sec/
 │       ├── binary-pwn/  crypto-forensics/  ctf-solver/
 │       ├── report-generator/  source-code-review/
@@ -168,7 +177,7 @@ cco/
 
 ---
 
-## ⚙️ 10 MCP Server — 181 Tool
+## ⚙️ 11 MCP Server — 187 Tool
 
 | Server | Tool | Öne Çıkanlar |
 |--------|---|--------------|
@@ -181,11 +190,13 @@ cco/
 | `osint-tools` | 9 | `crtsh_subdomains`, `dns_recon`, `dns_zone_transfer`, `wayback_urls`, `rdap_whois`, `username_osint`, `github_code_search`, `password_spray_structured` |
 | `telemetry` | 9 | `log_tool_call`, `log_llm_call`, `get_cost_summary`, `get_savings_report`, `get_metrics_dashboard` |
 | `browser` | 9 | `browser_screenshot`, `browser_extract_links`, `browser_security_headers`, `browser_cookie_audit`, `browser_capture_requests`, `browser_console_logs`, `browser_dom_xss_probe` (Playwright) |
-| `rag-engine` | 7 | `rag_search`, `rag_add_cve`, `rag_add_writeup` (ChromaDB semantic search) |
+| `rag-engine` | 7 | `rag_search`, `rag_similar_exploits`, `rag_ingest_cve`, `rag_ingest_exploitdb`, `rag_ingest_writeup`, `rag_bulk_ingest`, `rag_stats` (ChromaDB) |
+| `llm-security` | 6 | `llm_prompt_injection_probe`, `llm_system_prompt_leak`, `llm_jailbreak_test`, `llm_data_leak_probe`, `generate_injection_payloads`, `llm_owasp_top10_checklist` (OWASP LLM Top 10) |
 
-> Not: `ad-tools`, `container-tools`, `osint-tools`, `browser` artık
-> `install-cco.sh` tarafından `~/.claude.json`'a otomatik kaydedilir.
-> `browser` Playwright gerektirir (opsiyonel; yoksa net hata mesajı döner).
+> Not: 11 server'ın tamamı `install-cco.sh` tarafından `~/.claude.json`'a
+> otomatik kaydedilir. `browser` Playwright gerektirir (opsiyonel; yoksa net
+> hata mesajı döner). `rag-engine` ilk kullanımda boştur — install sırasında
+> (veya `python3 scripts/rag-bootstrap.py` ile) CVE/ExploitDB/payload ile doldurulur.
 
 ---
 
@@ -215,7 +226,7 @@ CCO_HOME=~/.cco
 ```
 
 ### `~/.claude.json` (install-cco.sh tarafından oluşturulur)
-10 MCP server'ın command/args/env tanımları. Mevcut dosya yedeklenir, sadece
+11 MCP server'ın command/args/env tanımları. Mevcut dosya yedeklenir, sadece
 `mcpServers` alanı güncellenir.
 
 ---
@@ -256,4 +267,4 @@ Bu sistem **yalnızca yasal ve etik** güvenlik testi amaçlarıyla kullanılmal
 ---
 
 *Developed for ethical security research and CTF competitions.*
-*4.327 lines of Python orchestration → 0. MCP tools: 181 (10 server). Model choices: unlimited.*
+*4.327 lines of Python orchestration → 0. MCP tools: 187 (11 server). Skills: 20. Model choices: unlimited.*

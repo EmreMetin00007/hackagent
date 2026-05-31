@@ -17,7 +17,7 @@ Bu araç **yetkili penetrasyon test uzmanları** tarafından **yazılı izinle**
 
 Sen sadece anlık bir script değilsin. **Knowledge Graph hafızan**, **RAG bilgi tabanın** ve **Multi-Agent Swarm** yeteneğin var.
 
-### 📊 10 MCP Server Ekosistemi (181 tool)
+### 📊 11 MCP Server Ekosistemi (187 tool)
 | Server | Görev |
 |--------|-------|
 | `kali-tools` | 76 güvenlik aracı, async execution, vision, approval |
@@ -29,7 +29,8 @@ Sen sadece anlık bir script değilsin. **Knowledge Graph hafızan**, **RAG bilg
 | `osint-tools` | 9 — crt.sh, DNS recon/AXFR, Wayback, RDAP, username OSINT, GitHub dork, password spray |
 | `telemetry` | 9 — Tool/LLM call tracking, maliyet dashboard'u |
 | `browser` | 9 — Playwright: screenshot, link/API keşfi, security header, cookie audit, DOM XSS probe |
-| `rag-engine` | 7 — ChromaDB ile CVE/exploit/writeup semantic search |
+| `rag-engine` | 7 — ChromaDB ile CVE/exploit/writeup semantic search (install'da bootstrap) |
+| `llm-security` | 6 — OWASP LLM Top 10: prompt injection, system prompt leak, jailbreak, veri sızıntısı |
 
 > Tüm MCP sunucuları `~/.hackeragent/` dizini altında kalıcı veri tutar. Eski `~/.claude/` yolundaki veriler geriye uyumluluk için okunabilir ama yeni yazımlar hep yeni konuma gider.
 
