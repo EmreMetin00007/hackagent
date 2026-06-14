@@ -44,9 +44,10 @@ def test_reasoning_imports_and_tool_count():
     mod = _r()
     assert hasattr(mod, "mcp")
     names = list_tool_names(mod)
-    assert len(names) == 13, f"reasoning 13 tool sunmalı, {len(names)} bulundu"
+    assert len(names) == 14, f"reasoning 14 tool sunmalı, {len(names)} bulundu"
     assert "deep_think" in names
     assert "compose_attack_chains" in names
+    assert "recommend_skills" in names
 
 
 def test_normalize_tech():
@@ -149,7 +150,9 @@ def test_deep_think_offline_combines_pillars():
         assert out["step_3_chosen_action"]["technique"] == "sql_injection"
         assert out["validator_hook"] == "mcp__validator__validate_sqli"
         assert out["step_4_reflexion"]["skipped"] is True   # LLM yok
-        assert len(out["next_steps"]) == 3
+        assert "step_0_recommended_skills" in out
+        assert out["step_2b_kill_chains"]["chains_found"] >= 1
+        assert len(out["next_steps"]) == 5
     finally:
         for k, v in saved.items():
             if v is not None:

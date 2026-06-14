@@ -96,6 +96,15 @@ mcp__reasoning__exploitability_score(technique, validator_confidence, reflexion_
 > mümkün → false-positive'siz, yayınlanabilir kanıt.
 
 
+## (c) Auto-Skill Router — doğru skill'i deterministik seç
+```
+mcp__reasoning__recommend_skills(target, context, fingerprint, top_n)
+   → hedef parmak izine göre HANGİ skill (/web-exploit, /active-directory, /cloud-exploitation...)
+   → tam tetikleme komutu (/skill <hedef>) + kickoff. Modelin skill tetikleme tutarsızlığını çözer.
+```
+> `deep_think` ZATEN step_0'da `recommend_skills`'i çağırır → tek komutta keşif→zincir→
+> doğrula→skorla. Slash command (kickoff) modelden bağımsız EN GÜVENİLİR tetikleme yoludur.
+
 ## Kurallar
 - Karmaşık/belirsiz/yeni görevde **ilk çağrı `deep_think`** olmalı.
 - Reflexion onayı ≠ kanıt; **validator** olmadan "kesin" deme.

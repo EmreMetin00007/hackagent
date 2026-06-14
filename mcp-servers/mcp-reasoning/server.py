@@ -665,11 +665,19 @@ def deep_think(task: str, target: str = "", scope: str = "", context: str = "",
         reflexion: Seçilen aksiyona Reflexion uygula (LLM varsa)
     """
     recalled = json.loads(recall_lessons(context=f"{task} {context}", k=5))
+    skills = json.loads(recommend_skills(target=target, context=f"{task} {context}", top_n=4))
     plan = json.loads(plan_attack_tree(target=target, scope=scope, expand=True))
+    chains = json.loads(compose_attack_chains(target=target, scope=scope, top_n=5))
     chosen = plan.get("highest_ev")
+    best_chain = chains.get("best_chain")
 
     out = {
         "task": task, "target": target, "scope": scope,
+        "step_0_recommended_skills": {
+            "kickoff": skills.get("kickoff"),
+            "phase": skills.get("phase"),
+            "ranked": skills.get("recommended_skills", [])[:4],
+        },
         "step_1_recalled_lessons": recalled.get("lessons", []),
         "step_2_attack_plan": {
             "ranked_actions": plan.get("ranked_actions", []),
@@ -677,11 +685,21 @@ def deep_think(task: str, target: str = "", scope: str = "", context: str = "",
             "findings_count": plan.get("findings_count"),
             "endpoints_count": plan.get("endpoints_count"),
         },
+        "step_2b_kill_chains": {
+            "chains_found": chains.get("chains_found", 0),
+            "ranked_chains": chains.get("ranked_chains", [])[:3],
+            "best_chain": best_chain,
+            "best_chain_report": kill_chain_report(json.dumps(best_chain)) if best_chain else None,
+        },
         "step_3_chosen_action": chosen,
     }
     if chosen:
         out["validator_hook"] = chosen.get("validate_with")
         out["recommended_tool"] = chosen.get("recommended_tool")
+        # (skorla) doğrulamadan ÖNCE kalibre ön-skor: validator yok → POSSIBLE üst sınır
+        out["step_5_exploitability_preview"] = json.loads(exploitability_score(
+            technique=chosen["technique"], validator_confidence=-1.0,
+            severity=chosen.get("severity", "info"), evidence=chosen.get("rationale", "")))
         if reflexion and _any_llm_key():
             refl = json.loads(reason_reflexion(
                 task=f"{task} — primary vector: {chosen['technique']}",
@@ -699,13 +717,17 @@ def deep_think(task: str, target: str = "", scope: str = "", context: str = "",
                                        "reason": "reflexion kapalı veya LLM yok",
                                        "static_checklist": _static_critique("plan")}
     else:
-        out["advice"] = ("memory boş — önce recon/enumeration yap, store_finding/"
-                         "store_endpoint ile kaydet, sonra deep_think tekrar çağır.")
+        out["advice"] = ("memory boş — önce step_0 skill'leriyle recon/enumeration yap, "
+                         "store_finding/store_endpoint ile kaydet, sonra deep_think tekrar çağır.")
 
+    out["pipeline"] = ("recon → zincir(compose_attack_chains) → doğrula(validator) → "
+                       "skorla(exploitability_score) → exploit → öğren(record_lesson)")
     out["next_steps"] = [
-        "1) chosen_action.validate_with ile deterministik DOĞRULA (false-positive guard)",
-        "2) CONFIRMED ise recommended_tool ile exploit et + store_finding",
-        "3) Sonucu record_lesson ile kaydet (worked=true/false) → beyin akıllanır",
+        "0) step_0 skill'lerini tetikle (recon/keşif henüz yapılmadıysa)",
+        "1) step_2b en yüksek-EV kill-chain'i seç; ilk adımı validate_with ile DOĞRULA",
+        "2) exploitability_score'a validator confidence'ı ver → band CONFIRMED mı?",
+        "3) CONFIRMED ise recommended_tool ile exploit + store_finding, sonraki pivota geç",
+        "4) record_lesson(worked=?) ile kaydet → beyin + payload operatörleri akıllanır",
     ]
     return json.dumps(out, indent=2, ensure_ascii=False)
 
@@ -1154,6 +1176,128 @@ def exploitability_score(technique: str, validator_confidence: float = -1.0,
         "technique": tech, "exploitability_score": score, "band": band,
         "false_positive_risk": fp_risk, "basis": basis, "signals": signals,
         "recommended_validation": recommend, "evidence_narrative": narrative,
+    }, indent=2, ensure_ascii=False)
+
+
+# ═══════════ (c) Auto-Skill Router — fingerprint → doğru skill (meta-reasoning) ═══════════
+# Modelin skill'i tetikleyip tetiklememe tutarsızlığını ortadan kaldırır: hedef parmak
+# izine göre DETERMİNİSTİK skill seçer ve tam tetikleme komutunu (/skill) verir.
+SKILL_SIGNALS = {
+    "attack-surface-mapping": (["subdomain", "passive", "attack surface", "wayback", "crt.sh",
+                                "github", "whois", "new target", "fresh", "dns recon"], "/attack-surface-mapping"),
+    "recon-enumeration": (["port", "nmap", "enumerat", "service", "scan", "keşif",
+                           "fingerprint", "open port", "banner"], "/recon-enumeration"),
+    "web-exploit": (["login", "form", "sqli", "sql injection", "xss", "lfi", "rfi", "ssti",
+                     "command inj", "file upload", "php", "apache", "nginx", "parameter",
+                     "wordpress", "web app"], "/web-exploit"),
+    "web-advanced": (["graphql", "jwt", "oauth", "saml", "websocket", "cache poison",
+                      "smuggling", "prototype pollution", "cors", "idor", "sso"], "/web-advanced"),
+    "advanced-api-sec": (["api", "rest", "openapi", "swagger", "grpc", "/api/", "endpoint",
+                          "mass assignment", "rate limit"], "/advanced-api-sec"),
+    "llm-security": (["llm", "chatbot", "prompt inject", "/api/chat", "gpt", "completion",
+                      "ai model", "jailbreak", "rag"], "/llm-security"),
+    "active-directory": (["active directory", "kerberos", "ldap", "ntlm", "domain controller",
+                          "bloodhound", "as-rep", "kerberoast", "port 88", "port 389",
+                          "port 445", "smb"], "/active-directory"),
+    "windows-exploitation": (["windows", "rdp", "port 3389", "powershell", "msrpc", "winrm",
+                              "port 5985"], "/windows-exploitation"),
+    "cloud-exploitation": (["aws", "gcp", "azure", "s3", "imds", "169.254.169.254", "iam",
+                            "metadata", "bucket", "lambda", "cloud"], "/cloud-exploitation"),
+    "container-security": (["docker", "kubernetes", "k8s", "container", "pod", "helm",
+                            "kubelet", "port 2375", "port 10250", "registry"], "/container-security"),
+    "mobile-security": (["android", "ios", "apk", "ipa", "mobile", "frida", "mobsf"], "/mobile-security"),
+    "binary-pwn": (["binary", "elf", "pwn", "buffer overflow", "rop", "ret2", "format string",
+                    "gdb", "pwntools", "heap"], "/binary-pwn"),
+    "crypto-forensics": (["crypto", "cipher", "rsa", "aes", "hash crack", "forensic", "pcap",
+                          "steg", "wireshark", "decode"], "/crypto-forensics"),
+    "ctf-solver": (["ctf", "picoctf", "hackthebox", "htb", "tryhackme", "thm", "flag{",
+                    "challenge", "jeopardy"], "/ctf-solver"),
+    "source-code-review": (["source code", "code review", "sast", "sink", "git clone",
+                            "repository", "whitebox", "grep secret"], "/source-code-review"),
+    "osint-password-spraying": (["password spray", "credential stuffing", "leaked", "breach",
+                                 "user enum", "email list", "o365", "okta", "login portal"], "/osint-password-spraying"),
+    "payload-generation": (["payload", "shellcode", "msfvenom", "reverse shell", "encoder",
+                            "stager"], "/payload-generation"),
+    "post-exploitation": (["post-exploit", "pivot", "persistence", "privilege escal",
+                           "loot", "lateral movement", "priv esc"], "/post-exploitation"),
+    "stealth-evasion": (["waf", "evasion", "stealth", "blocked", "403", "opsec", "ip ban",
+                         "cloudflare", "akamai", "rate-limit"], "/stealth-evasion"),
+    "exploit-validation": (["validate", "false positive", "confirm exploit", "verify",
+                            "poc kanıt", "oracle"], "/exploit-validation"),
+    "report-generator": (["report", "rapor", "writeup", "deliverable", "disclosure", "cvss"], "/report-generator"),
+    "deep-reasoning": (["plan", "strateji", "strategy", "stuck", "chain", "zincir",
+                        "kill-chain", "next step", "öncelik"], "/deep-reasoning"),
+}
+FINDING_SKILL = {
+    "sql_injection": "web-exploit", "sql_injection_blind": "web-exploit",
+    "xss_reflected": "web-exploit", "xss_stored": "web-exploit", "xss_dom": "web-exploit",
+    "lfi": "web-exploit", "rfi": "web-exploit", "ssti": "web-exploit",
+    "command_injection": "web-exploit", "file_upload": "web-exploit", "rce": "web-exploit",
+    "path_traversal": "web-exploit", "idor": "web-advanced", "jwt_attack": "web-advanced",
+    "cors_misconfiguration": "web-advanced", "xxe": "web-advanced", "open_redirect": "web-advanced",
+    "authentication_bypass": "web-advanced", "deserialization": "web-advanced",
+    "ssrf": "cloud-exploitation", "default_credentials": "osint-password-spraying",
+    "weak_credentials": "osint-password-spraying", "subdomain_takeover": "attack-surface-mapping",
+}
+
+
+@mcp.tool()
+def recommend_skills(target: str = "", context: str = "", fingerprint: str = "", top_n: int = 5) -> str:
+    """(c) AUTO-SKILL ROUTER — hedef parmak izine (memory teknolojileri/bulguları + serbest
+    metin) göre HANGİ skill'in çalışacağını DETERMİNİSTİK seçer ve tam tetikleme komutunu
+    (/skill <hedef>) verir. Modelin skill'i tetikleyip tetiklememe tutarsızlığını ortadan
+    kaldırır → 'körlemesine başlama, doğru skill'i seç'.
+
+    Args:
+        target: Hedef (memory'den teknoloji/bulgu okur)
+        context: Serbest görev/durum metni
+        fingerprint: Ek parmak izi (stack/banner/teknoloji listesi)
+        top_n: Döndürülecek skill sayısı
+    """
+    findings = _read_findings(target) if target else []
+    endpoints = _read_endpoints(target) if target else []
+    fp = " ".join([
+        context, fingerprint,
+        " ".join(f.get("type", "") + " " + f.get("description", "") for f in findings),
+        " ".join(e.get("technologies", "") + " " + e.get("url_or_port", "") for e in endpoints),
+    ]).lower()
+
+    scores, matched = {}, {}
+    for skill, (signals, _trig) in SKILL_SIGNALS.items():
+        m = [s for s in signals if s in fp]
+        if m:
+            scores[skill] = len(m)
+            matched[skill] = list(m)
+
+    fresh = not findings and not endpoints
+    if fresh:
+        for s, b in (("attack-surface-mapping", 3), ("recon-enumeration", 3), ("deep-reasoning", 1)):
+            scores[s] = scores.get(s, 0) + b
+            matched.setdefault(s, []).append("fresh-target")
+    else:
+        for f in findings:
+            sk = FINDING_SKILL.get(_normalize_tech(f.get("type", "")))
+            if sk:
+                scores[sk] = scores.get(sk, 0) + 2
+                matched.setdefault(sk, []).append(f"finding:{_normalize_tech(f.get('type',''))}")
+        for s, b in (("exploit-validation", 1), ("deep-reasoning", 1)):
+            scores[s] = scores.get(s, 0) + b
+            matched.setdefault(s, []).append("has-findings")
+
+    if not scores:
+        scores = {"recon-enumeration": 2, "attack-surface-mapping": 2, "deep-reasoning": 1}
+        matched = {k: ["default"] for k in scores}
+
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:max(1, int(top_n))]
+    recs = [{"skill": sk, "trigger": SKILL_SIGNALS.get(sk, ([], "/" + sk))[1],
+             "score": sc, "matched_signals": matched.get(sk, [])} for sk, sc in ranked]
+    kickoff = (recs[0]["trigger"] + (f" {target}" if target else "")) if recs else ""
+    return json.dumps({
+        "engine": "deterministic skill router (fingerprint → skill)",
+        "target": target or "(yok)", "phase": "fresh-recon" if fresh else "exploitation",
+        "recommended_skills": recs, "kickoff": kickoff,
+        "note": "Slash command (örn. /web-exploit <hedef>) modelden bağımsız EN GÜVENİLİR "
+                "tetikleme yoludur. Skill tetiklenince ilgili MCP tool'ları otomatik kullanılır.",
     }, indent=2, ensure_ascii=False)
 
 

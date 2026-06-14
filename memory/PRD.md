@@ -35,6 +35,28 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — Auto-Skill Router (c) + deep_think Orkestratör Köprüsü
+
+**Kullanıcı seçimi:** (c) Auto-Skill Router + "pazarlama köprüsü": deep_think otomatik
+compose_attack_chains çağırsın → tek komutta recon→zincir→doğrula→skorla.
+
+**Yapılanlar (`mcp-reasoning` 13 → 14 tool):**
+- **(c) `recommend_skills`** — hedef parmak izine (memory teknolojileri/bulguları + serbest
+  metin) göre HANGİ skill'in çalışacağını DETERMİNİSTİK seçer ve tam tetikleme komutunu
+  (`/web-exploit <hedef>` vb.) + kickoff verir. 22 skill için sinyal kataloğu + bulgu→skill
+  haritası + faz ayarı (memory boşsa keşif önce). Dokümante "model skill'i tetiklemiyor"
+  tutarsızlığını çözer.
+- **deep_think orkestratör köprüsü** — artık tek çağrıda: step_0 `recommend_skills` →
+  step_1 dersler → step_2 plan → **step_2b `compose_attack_chains` (kill-chain + report)** →
+  step_3 seçilen vektör → step_4 reflexion → **step_5 `exploitability_score` ön-skoru** +
+  `pipeline` ("recon→zincir→doğrula→skorla→exploit→öğren") + 5 adımlı next_steps.
+
+**Doğrulama:** ✅ `pytest -q` → **98 passed, 1 skipped** (yeni `test_reasoning_router.py`:
+7 test — fresh-recon fazı, web-advanced/cloud/AD sinyal yönlendirme, exploitation fazı
+bulgu→skill, slash-command tetikleyiciler, deep_think'in zincir+skor+skill köprüsü).
+Sayaçlar: **13→14 reasoning tool, 213→214 toplam** (README/CLAUDE/test guard güncellendi).
+
+
 ### 2026-06-14 — Zeka Katmanı v2: Kill-Chain Intelligence + Payload Evolution + Exploitability Score
 
 **Kullanıcı seçimi:** "skill/zeka tarafını piyasayı kasıp kavuracak" 3 farklılaştırıcı,
