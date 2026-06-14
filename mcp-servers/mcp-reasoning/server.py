@@ -1561,5 +1561,116 @@ def adaptive_evasion_step(payload: str, technique: str, status_code: int = 0,
     return json.dumps(out, indent=2, ensure_ascii=False)
 
 
+# ═══════════ (b+) Origin DOĞRULAMA — WAF baypas kanıtı ═══════════
+def _fetch_host_override(ip, domain, timeout=5):
+    """Kali'de canlı: IP'ye bağlan, Host header'ı domain olarak gönder (CDN baypas denemesi)."""
+    import http.client
+    import ssl
+    last = "no attempt"
+    try:
+        conn = http.client.HTTPSConnection(ip, timeout=timeout,
+                                           context=ssl._create_unverified_context())
+        conn.request("GET", "/", headers={"Host": domain, "User-Agent": "Mozilla/5.0"})
+        r = conn.getresponse()
+        body = r.read(4096).decode("utf-8", "replace")
+        hdrs = "\n".join(f"{k}: {v}" for k, v in r.getheaders())
+        conn.close()
+        return {"status": r.status, "headers": hdrs, "body": body, "scheme": "https"}
+    except Exception as e:
+        last = str(e)
+    try:
+        conn = http.client.HTTPConnection(ip, timeout=timeout)
+        conn.request("GET", "/", headers={"Host": domain, "User-Agent": "Mozilla/5.0"})
+        r = conn.getresponse()
+        body = r.read(4096).decode("utf-8", "replace")
+        hdrs = "\n".join(f"{k}: {v}" for k, v in r.getheaders())
+        conn.close()
+        return {"status": r.status, "headers": hdrs, "body": body, "scheme": "http"}
+    except Exception as e:
+        last = str(e)
+    return {"status": 0, "headers": "", "body": "", "error": last}
+
+
+def _origin_verdict(resp: dict, cdn_blob: str, markers: str) -> dict:
+    """Bir Host-override cevabının gerçek origin olup olmadığına deterministik karar."""
+    status = int(resp.get("status", 0) or 0)
+    headers = str(resp.get("headers", "") or "")
+    body = str(resp.get("body", "") or "")
+    err = resp.get("error")
+    if err or status == 0:
+        return {"verdict": "unreachable", "confidence": 0.0,
+                "reason": f"bağlantı yok/timeout ({err or 'no response'})"}
+    vendor, _, matched = _fingerprint(" ".join([headers, body]))
+    cdn_vendor, _, _ = _fingerprint(cdn_blob or "")
+    if (vendor != "unknown" and WAF_SIGNATURES.get(vendor, {}).get("cdn")
+            and (cdn_vendor == "unknown" or vendor == cdn_vendor)):
+        return {"verdict": "still_behind_cdn", "confidence": 0.1,
+                "reason": f"yanıt hâlâ {vendor} imzası taşıyor ({matched[:3]}) → origin değil"}
+    mk = [m.strip() for m in re.split(r"[|;,]+", markers or "") if m.strip()]
+    hit = [m for m in mk if m.lower() in body.lower()]
+    if hit:
+        return {"verdict": "confirmed_origin", "confidence": 0.95,
+                "reason": f"beklenen içerik markörü eşleşti: {hit}", "matched_markers": hit}
+    if status in (200, 201, 301, 302) and body:
+        return {"verdict": "confirmed_origin", "confidence": 0.7,
+                "reason": f"Host override ile status {status}, CDN imzası yok → muhtemel origin"}
+    if status in (401, 403, 500, 502):
+        return {"verdict": "reachable_no_proof", "confidence": 0.4,
+                "reason": f"status {status} (origin olabilir ama içerik kanıtı yok — markör ver)"}
+    return {"verdict": "inconclusive", "confidence": 0.3,
+            "reason": f"status {status}, net markör yok — expected_markers ver"}
+
+
+@mcp.tool()
+def verify_origin(domain: str, candidate_ips: str, cdn_fingerprint: str = "",
+                  expected_markers: str = "", responses_json: str = "", timeout: int = 5,
+                  live: bool = True) -> str:
+    """(b+) ORIGIN DOĞRULAMA — discover_origin adaylarına Host-override istek atıp gerçek
+    origin'i KANITLAR (WAF baypası teyidi). Adayın cevabı hâlâ CDN imzası taşıyorsa reddeder;
+    beklenen içerik markörü eşleşir / CDN'siz gerçek cevap dönerse 'confirmed_origin' der.
+    Kali'de CANLI fetch yapar; `responses_json` verilirse onu kullanır (kali-tools ile çekip
+    besle / offline). Origin doğrulanırsa tüm exploit oraya yönlendirilir → WAF devre dışı.
+    Yetkili test için.
+
+    Args:
+        domain: Hedef alan adı (Host header'ı)
+        candidate_ips: Aday origin IP'leri (virgül/boşluk ayrık) — discover_origin çıktısından
+        cdn_fingerprint: Önyüz (CDN) header/body imzası — 'hâlâ CDN mi' kıyası için
+        expected_markers: Gerçek sitede beklenen benzersiz içerik (başlık/telif/sınıf), '|' ayrık
+        responses_json: Önceden çekilmiş {"ip":{"status","headers","body"}} (offline/kali-tools)
+        timeout: Canlı fetch timeout (sn)
+        live: True ise IP'lere canlı Host-override isteği at (Kali)
+    """
+    ips = [x.strip() for x in re.split(r"[\s,;]+", candidate_ips or "") if x.strip()]
+    try:
+        provided = json.loads(responses_json) if responses_json else {}
+    except Exception:
+        provided = {}
+    results, confirmed = [], None
+    for ip in ips:
+        if ip in provided:
+            resp, src = provided[ip], "provided"
+        elif live:
+            resp, src = _fetch_host_override(ip, domain, timeout), "live"
+        else:
+            resp, src = {"status": 0, "error": "live=False ve responses_json yok"}, "none"
+        v = _origin_verdict(resp, cdn_fingerprint, expected_markers)
+        entry = {"ip": ip, "source": src, "status": resp.get("status", 0), **v}
+        results.append(entry)
+        if v["verdict"] == "confirmed_origin" and confirmed is None:
+            confirmed = entry
+    results.sort(key=lambda r: r["confidence"], reverse=True)
+    return json.dumps({
+        "domain": domain, "verified": confirmed is not None, "confirmed_origin": confirmed,
+        "candidates": results,
+        "bypass_proof": (f"curl -sk -H 'Host: {domain}' https://{confirmed['ip']}/  "
+                         "# WAF/CDN baypas edildi (origin'e doğrudan erişim)") if confirmed else None,
+        "note": ("Origin DOĞRULANDI → tüm exploit'i bu IP'ye Host override ile yönelt (WAF "
+                 "devre dışı). store_endpoint ile kaydet." if confirmed else
+                 "Origin kanıtlanamadı — expected_markers (sitenin benzersiz içeriği) ver; "
+                 "discover_origin ile daha çok aday topla; Kali'de live=True dene."),
+    }, indent=2, ensure_ascii=False)
+
+
 if __name__ == "__main__":
     mcp.run()

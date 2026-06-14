@@ -44,11 +44,12 @@ def test_reasoning_imports_and_tool_count():
     mod = _r()
     assert hasattr(mod, "mcp")
     names = list_tool_names(mod)
-    assert len(names) == 18, f"reasoning 18 tool sunmalı, {len(names)} bulundu"
+    assert len(names) == 19, f"reasoning 19 tool sunmalı, {len(names)} bulundu"
     assert "deep_think" in names
     assert "compose_attack_chains" in names
     assert "recommend_skills" in names
     assert "fingerprint_waf" in names
+    assert "verify_origin" in names
 
 
 def test_normalize_tech():

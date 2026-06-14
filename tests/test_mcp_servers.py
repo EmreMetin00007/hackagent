@@ -30,7 +30,7 @@ EXPECTED_TOOL_COUNTS = {
     "osint-tools": 9,
     "telemetry": 9,
     "browser": 9,
-    "reasoning": 18,
+    "reasoning": 19,
     "rag-engine": 7,
     "llm-security": 6,
 }

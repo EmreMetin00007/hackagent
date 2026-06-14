@@ -127,3 +127,44 @@ def test_adaptive_evasion_rate_limit_throttles():
     assert out["classification"] == "rate_limit"
     assert "throttle" in out
     assert out["next_variants"] == []                 # rate-limit'te payload yakma
+
+
+# ───────────────────── (b+) verify_origin — WAF baypas kanıtı ─────────────────────
+def test_verify_origin_confirmed_with_marker():
+    mod = _r()
+    resp = json.dumps({"5.6.7.8": {"status": 200, "headers": "Server: nginx",
+                                   "body": "<title>Acme Internal Portal</title> welcome"}})
+    out = json.loads(mod.verify_origin("acme.com", "5.6.7.8 1.2.3.4",
+                     cdn_fingerprint="Server: cloudflare\ncf-ray: 1",
+                     expected_markers="Acme Internal Portal", responses_json=resp, live=False))
+    assert out["verified"] is True
+    assert out["confirmed_origin"]["ip"] == "5.6.7.8"
+    assert "Host: acme.com" in out["bypass_proof"]
+
+
+def test_verify_origin_rejects_still_cdn():
+    mod = _r()
+    resp = json.dumps({"1.2.3.4": {"status": 403, "headers": "Server: cloudflare\ncf-ray: 9",
+                                   "body": "Attention Required! | Cloudflare"}})
+    out = json.loads(mod.verify_origin("acme.com", "1.2.3.4",
+                     cdn_fingerprint="Server: cloudflare cf-ray", responses_json=resp, live=False))
+    assert out["verified"] is False
+    assert out["candidates"][0]["verdict"] == "still_behind_cdn"
+
+
+def test_verify_origin_confirms_200_no_cdn():
+    mod = _r()
+    resp = json.dumps({"5.6.7.8": {"status": 200, "headers": "Server: Apache",
+                                   "body": "<html>app dashboard</html>"}})
+    out = json.loads(mod.verify_origin("acme.com", "5.6.7.8",
+                     cdn_fingerprint="Server: cloudflare cf-ray", responses_json=resp, live=False))
+    assert out["verified"] is True
+    assert out["confirmed_origin"]["confidence"] == 0.7
+
+
+def test_verify_origin_unreachable_offline_no_socket():
+    mod = _r()
+    # live=False + responses_json yok → SOCKET AÇILMAZ (offline güvenli) → unreachable
+    out = json.loads(mod.verify_origin("acme.com", "9.9.9.9", live=False))
+    assert out["verified"] is False
+    assert out["candidates"][0]["verdict"] == "unreachable"
