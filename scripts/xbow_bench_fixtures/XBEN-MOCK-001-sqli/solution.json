@@ -1,5 +1,6 @@
 {
   "solvable": true,
+  "difficulty": 1,
   "flag": "flag{mock_sqli_dumped_admin_hash}",
   "cost_usd": 0.42,
   "duration_s": 37.5

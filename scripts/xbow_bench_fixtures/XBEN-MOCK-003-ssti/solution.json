@@ -1,5 +1,6 @@
 {
   "solvable": true,
+  "difficulty": 3,
   "flag": "flag{mock_ssti_jinja2_rce}",
   "cost_usd": 0.55,
   "duration_s": 44.3
