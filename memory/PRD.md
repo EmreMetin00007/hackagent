@@ -35,6 +35,39 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — `mcp-hunter` P1: Auto-Fanout (kali-tools) + RAG Enrichment (rag-engine)
+
+Kullanıcı isteği: "`hunt_variants`'ı kali-tools'a auto-fanout olarak bağla (doğrulanan bug →
+varyantları otomatik çalıştır+doğrula); `predict_vulnerabilities` çıktısını rag-engine'e
+otomatik besleyip CVE PoC'larını çekme." → `mcp-hunter` 6→8 tool.
+
+- **H6 `auto_fanout_variants`** (kali-tools köprüsü): doğrulanan bir bug'ı alır, çalıştırılabilir
+  varyantları üretir. **PLAN modu (offline, varsayılan):** her varyant için `mcp__kali-tools__
+  curl_request(...)` + `mcp__validator__validate_*(...)` çağrılarından FANOUT PLANI döndürür.
+  **LIVE modu:** GET-tabanlı güvenli varyantları (kardeş param + header konumu) gerçekten gönderir
+  (validator tarzı `requests`), sınıfa-özel hızlı triage oracle uygular (XSS yansıma / SQL-hata
+  imzası / LFI passwd / open-redirect Location / cmdi uid / differential) → LIKELY varyantları
+  kesin doğrulama için validator'a devreder. Yıkıcı sınıflar (rce/upload/cmdi/deserialization)
+  canlıda atlanır (`allow_mutations` gerekir); `max_requests` rate-limit/OPSEC guard.
+- **H7 `enrich_with_rag`** (rag-engine köprüsü): `predict_vulnerabilities` çıktısını otomatik
+  RAG'a bağlar. Tahminlerin `cve_families`'inden CVE ID'leri regex ile çıkarır; rag-engine'in
+  kullandığı **aynı ChromaDB**'yi (`CCO_HOME/rag_db`) read-only inline sorgular → eşleşen
+  PoC/exploit/CVE hit'leri (relevance-scored). DB boşsa graceful: `rag_ingest_cve` +
+  `rag_ingest_exploitdb` + `rag_search` INGEST PLANI döndürür. "Stack tahmini → somut PoC".
+  Tek çağrıyla predict→rag (predictions_json verilmezse içeride predict çalıştırır).
+
+**Entegrasyon:** CLAUDE.md Kural 7 akışına 1b (RAG PoC) + 5 (auto-fanout LIVE) eklendi; skill
+flow + README server tablosu/bug-hunting bölümü/profil tablosu güncellendi. Tool guard 6→8,
+toplam 225→227. cco-profile/token-estimate otomatik (list_tools).
+
+**Doğrulama:** ✅ `pytest -q` → **137 passed, 1 skipped** (5 yeni test: fanout PLAN offline,
+yıkıcı-sınıf canlı atlama, **canlı XSS yansıma triage** loopback reflektör sunucuya karşı →
+LIKELY, RAG CVE çıkarımı + ingest/search planı, predictions_json kabulü). Canlı demo: Laravel/
+Apache/Struts → CVE-2021-3129/41773/2017-5638 çıkarıldı + ingest_plan üretildi; SQLi fanout →
+11 varyant + curl + validate_sqli followup. ruff temiz. Hiçbir flow mock değil; inline RAG
+chromadb yoksa graceful plan'a düşer.
+
+
 ### 2026-06-14 — Bug-Hunting Intelligence: `mcp-hunter` (scanner → hunter)
 
 **Kullanıcı isteği:** "Mimari olarak güçlendirme — daha çok ZEKA ve BUG BULMA etkileyecek

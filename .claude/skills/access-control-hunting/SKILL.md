@@ -17,6 +17,8 @@ katmanını bu sınıflara yönlendirir.
 ```
 1) PREDICT  → mcp__hunter__predict_vulnerabilities(target, fingerprint, context)
    → stack'e özel hangi sınıflar muhtemel + CVE ailesi + hangi skill/validator
+1b) RAG PoC → mcp__hunter__enrich_with_rag(target, fingerprint)
+   → tahmin CVE'lerini RAG'da ara + ingest_plan (rag_ingest_cve/exploitdb) → somut PoC/exploit
 2) COVERAGE → mcp__hunter__coverage_report(target)
    → hangi (endpoint × sınıf) test edilmedi? 'access_control'/'business_logic' kör noktası var mı?
 3) ACCESS CONTROL (en yüksek ödül):
@@ -27,10 +29,11 @@ katmanını bu sınıflara yönlendirir.
       → owner vs attacker farksal ORACLE → CONFIRMED ise KANIT (LLM görüşü değil)
 4) BUSINESS LOGIC:
    mcp__hunter__generate_abuse_cases(target, endpoint, params, context)
-   → fiyat/miktar/rol/kupon/iş-akışı/race kötüye-kullanım senaryoları
-5) ÇOĞALT:
-   mcp__hunter__hunt_variants(finding_type, target, param, endpoint)
-   → doğrulanan bug'ı kardeş param/endpoint/method/subdomain'de sistematik ara
+   → fiyat/miktar/rol/kupon/iş-akışı/race business-logic abuse
+5) ÇOĞALT (OTOMATİK):
+   mcp__hunter__auto_fanout_variants(finding_type, target, param, endpoint, live=True)
+   → doğrulanan bug'ın varyantlarını kali-tools curl ile çalıştırır + triage; validator'a devreder
+   (live=False → çalıştırılacak curl + validator çağrı PLANI; sadece plan istersen hunt_variants)
 6) KAYDET + ÖĞREN:
    mcp__memory-server__store_finding + mcp__reasoning__record_lesson(worked=?)
    + mcp__reasoning__exploitability_score → mcp__hunter__coverage_report (tekrar; % arttı mı?)

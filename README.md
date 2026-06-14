@@ -1,7 +1,7 @@
 # 🔴 CCO — Claude Code Offensive Operator
 
 > Otonom bug bounty avcısı & CTF çözücü. **Claude Code CLI** orkestrasyonu,
-> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **14 MCP server** ile 225
+> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **14 MCP server** ile 227
 > güvenlik aracı (deterministik **validator** + **reasoning beyni** + **bug-hunting zekası** dahil). Kali Linux için.
 
 **v3.1 HackerAgent → v2.0 CCO geçişi:** 4.327 satır Python orkestrasyon kodu
@@ -89,7 +89,7 @@ handle edilir ve modelden bağımsız olarak her zaman skill'i tetikler.
 │            │  │  │ mcp-browser      (9 tool) │   │
 │            │  │  │ mcp-reasoning   (19 tool) │   │
 │            │  │  │ mcp-rag-engine   (7 tool) │   │
-│            │  │  │ mcp-hunter       (6 tool) │   │
+│            │  │  │ mcp-hunter       (8 tool) │   │
 │            │  │  │ mcp-llm-security (6 tool) │   │
 │            │  │  └──────────────────────────┘   │
 └────────────┘  └─────────────────────────────────┘
@@ -129,7 +129,7 @@ cco/
 ├── install-cco.sh               ← Tek komut kurulum
 ├── README.md
 │
-├── mcp-servers/                 ← 14 MCP server (225 tool)
+├── mcp-servers/                 ← 14 MCP server (227 tool)
 │   ├── mcp-kali-tools/          ← 76 güvenlik aracı + LLM tools
 │   ├── mcp-web-advanced/        ← 25 modern web/API saldırı aracı
 │   ├── mcp-ctf-platform/        ← 14 — CTFd/HTB/THM entegrasyonu
@@ -141,7 +141,7 @@ cco/
 │   ├── mcp-telemetry/           ← 9 — maliyet + call tracking
 │   ├── mcp-browser/             ← 9 — Playwright client-side recon (opsiyonel)
 │   ├── mcp-reasoning/           ← 19 — BEYİN: deep_think (recon→zincir→doğrula→skorla) + plan + Reflexion + öğrenme + kill-chain + payload-evo + exploitability + skill-router + WAF/origin-bypass
-│   ├── mcp-hunter/              ← 6 🆕 BUG-HUNTING ZEKASI: predictive vuln intel + access-control (BOLA/BFLA/IDOR) matris+oracle + business-logic abuse + variant analizi + coverage
+│   ├── mcp-hunter/              ← 8 🆕 BUG-HUNTING ZEKASI: predictive vuln intel + access-control (BOLA/BFLA/IDOR) matris+oracle + business-logic abuse + variant analizi + coverage + auto-fanout (kali-tools köprüsü) + RAG enrichment (CVE PoC)
 │   ├── mcp-rag-engine/          ← 7 — ChromaDB CVE/exploit/writeup search
 │   └── mcp-llm-security/        ← 6 — OWASP LLM Top 10 (prompt inj./jailbreak)
 │
@@ -178,7 +178,7 @@ cco/
 │
 ├── tests/                       ← pytest smoke/regresyon suite
 │   ├── conftest.py
-│   ├── test_mcp_servers.py      ← 14 server import + 225 tool sayım guard
+│   ├── test_mcp_servers.py      ← 14 server import + 227 tool sayım guard
 │   ├── test_validator.py        ← deterministik validator oracle testleri
 │   ├── test_reasoning.py        ← reasoning beyni (EV/öğrenme/plan) testleri
 │   └── test_xbow_benchmark.py   ← benchmark harness (mock) testleri
@@ -200,7 +200,7 @@ cco/
 
 ---
 
-## ⚙️ 14 MCP Server — 225 Tool
+## ⚙️ 14 MCP Server — 227 Tool
 
 | Server | Tool | Öne Çıkanlar |
 |--------|---|--------------|
@@ -216,7 +216,7 @@ cco/
 | `browser` | 9 | `browser_screenshot`, `browser_extract_links`, `browser_security_headers`, `browser_cookie_audit`, `browser_capture_requests`, `browser_console_logs`, `browser_dom_xss_probe` (Playwright) |
 | `reasoning` 🆕 | 19 | **Biliş/beyin katmanı (DeepSeek-destekli):** `deep_think` (bayrak gemisi — recon→zincir→doğrula→skorla orkestratörü), `plan_attack_tree` (Bayesçi EV + ToT), `next_best_action`, `reason_reflexion` (actor↔critic self-correct), `critic_review`, `record_lesson`, `recall_lessons`, `lesson_stats` (kalıcı öğrenme) · **Kill-Chain:** `compose_attack_chains` (çok-adımlı zincir), `kill_chain_report` · **Payload Evo:** `evolve_payload` (WAF-aware), `record_payload_result` · **Kalibre güven:** `exploitability_score` · **Skill Router:** `recommend_skills` (fingerprint→/skill) · **Reverse-Proxy + WAF:** `fingerprint_waf`, `classify_response`, `discover_origin` (CDN arkası origin IP → WAF baypas), `adaptive_evasion_step` |
 | `rag-engine` | 7 | `rag_search`, `rag_similar_exploits`, `rag_ingest_cve`, `rag_ingest_exploitdb`, `rag_ingest_writeup`, `rag_bulk_ingest`, `rag_stats` (ChromaDB) |
-| `hunter` 🆕 | 6 | **Bug-hunting zekası (tarayıcıların kaçırdığı yüksek-ödüllü sınıflar):** `predict_vulnerabilities` (tech parmak izi → muhtemel sınıf + CVE ailesi + hedefli hipotez), `build_authz_matrix` (BOLA/BFLA/IDOR çok-kimlikli farksal test matrisi), `analyze_authz_result` (owner-vs-attacker farksal ORACLE → yetki ihlali kanıtı), `generate_abuse_cases` (fiyat/miktar/rol/kupon/iş-akışı/race business-logic abuse), `hunt_variants` (doğrulanan bug'ı kardeş param/endpoint/method/subdomain'de çoğalt), `coverage_report` (attack-surface × vuln-class kapsama + kör nokta = kaçırılan bug guard) |
+| `hunter` 🆕 | 8 | **Bug-hunting zekası (tarayıcıların kaçırdığı yüksek-ödüllü sınıflar):** `predict_vulnerabilities` (tech parmak izi → muhtemel sınıf + CVE ailesi + hedefli hipotez), `build_authz_matrix` (BOLA/BFLA/IDOR çok-kimlikli farksal test matrisi), `analyze_authz_result` (owner-vs-attacker farksal ORACLE → yetki ihlali kanıtı), `generate_abuse_cases` (fiyat/miktar/rol/kupon/iş-akışı/race business-logic abuse), `hunt_variants` (doğrulanan bug'ı kardeş param/endpoint/method/subdomain'de çoğalt), `coverage_report` (attack-surface × vuln-class kapsama + kör nokta = kaçırılan bug guard), `auto_fanout_variants` (varyantları **otomatik çalıştır+doğrula** → kali-tools curl + validator köprüsü; PLAN/LIVE), `enrich_with_rag` (predict çıktısını **rag-engine**'e besle → CVE PoC/exploit çek) |
 | `llm-security` | 6 | `llm_prompt_injection_probe`, `llm_system_prompt_leak`, `llm_jailbreak_test`, `llm_data_leak_probe`, `generate_injection_payloads`, `llm_owasp_top10_checklist` (OWASP LLM Top 10) |
 
 > Not: 14 server'ın tamamı `install-cco.sh` tarafından `~/.claude.json`'a
@@ -282,12 +282,15 @@ Hepsi deterministik çekirdek (offline test edilir); LLM varsa H1/H3 zenginleşi
 | **`generate_abuse_cases`** | fiyat/miktar/rol/kupon/iş-akışı/OTP semantiğine göre **business-logic abuse** + jenerik race/replay/mass-assignment | Mantık hataları imza ile bulunamaz → **AI'nın tarayıcıyı ezdiği** sınıf |
 | **`hunt_variants`** | Doğrulanan bir bug'ı kardeş param/endpoint/method/content-type/konum/subdomain'de **sistematik çoğaltır** | Tek bug → sürü; bug bounty avcısının elle yaptığı çoğaltmanın otomasyonu |
 | **`coverage_report`** | (endpoint × vuln-class) **test edildi/edilmedi matrisi** + tamamlanma % + kör nokta uyarısı | Kör nokta = **kaçırılan bug** (false-negative) guard'ı |
+| **`auto_fanout_variants`** 🆕 | Doğrulanan bug'ın varyantlarını **otomatik çalıştırılabilir** yapar: PLAN modu `mcp__kali-tools__curl_request` + `mcp__validator__*` çağrıları döndürür; LIVE modu GET-tabanlı güvenli varyantları gerçekten gönderip hızlı triage oracle uygular → umut verenler validator'a devredilir | Variant analizini **otomasyona** bağlar (kali-tools köprüsü) — tek bug'dan sürüye, elle koşturmadan |
+| **`enrich_with_rag`** 🆕 | `predict_vulnerabilities` çıktısını **rag-engine**'e besler: tahmin CVE'lerini çıkarır, RAG'da inline semantic arama yapıp eşleşen **PoC/exploit**'leri çeker + `rag_ingest_cve`/`rag_ingest_exploitdb`/`rag_search` ingest planı üretir | "Stack tahmini → **somut PoC**" zincirini otomatikleştirir |
 
 **Bug-hunting döngüsü (deep_think'i tamamlar):**
 ```
-predict_vulnerabilities → coverage_report (kör nokta?) → build_authz_matrix
-   → (test çalıştır) → analyze_authz_result (CONFIRMED?) → store_finding
-   → hunt_variants (çoğalt) → record_lesson → coverage_report (% arttı mı?)
+predict_vulnerabilities → enrich_with_rag (CVE PoC çek) → coverage_report (kör nokta?)
+   → build_authz_matrix → (test çalıştır) → analyze_authz_result (CONFIRMED?)
+   → store_finding → auto_fanout_variants (otomatik çoğalt+doğrula) → record_lesson
+   → coverage_report (% arttı mı?)
 ```
 Tetikleyici skill: `/access-control-hunting` (BOLA/BFLA/IDOR + iş mantığı metodolojisi).
 
@@ -338,7 +341,7 @@ Detaylı metodoloji: `workflows/benchmark-workflow.md`.
 ## 💸 Token Tasarrufu — MCP Profilleri
 
 Claude Code **her istekte tüm kayıtlı MCP server'ların tool şemalarını** context'e
-yükler — 14 server / 225 tool ≈ **~34K token/istek** (sadece şema). Göreve göre
+yükler — 14 server / 227 tool ≈ **~37K token/istek** (sadece şema). Göreve göre
 yalnızca ilgili server'ları yükleyerek istek başına 10-24K token tasarruf edilir.
 
 ```bash
@@ -357,8 +360,8 @@ python3 scripts/token-estimate.py --current   # aktif profilin maliyeti
 | `ad`    | 6 | 136 | ~22.6K | %38 |
 | `recon` | 7 | 138 | ~23.3K | %36 |
 | `ctf`   | 7 | 148 | ~24.3K | %33 |
-| `web`   | 10 | 180 | ~29.8K | %18 |
-| `full`  | 14 | 225 | ~36.4K | %0 |
+| `web`   | 10 | 182 | ~30.7K | %18 |
+| `full`  | 14 | 227 | ~37.2K | %0 |
 
 > Profil değişikliği **yeni bir `claude` oturumunda** etkili olur. Mevcut config
 > (doldurulmuş token'lar dahil) korunur; yalnızca `mcpServers` alanı güncellenir.
@@ -370,7 +373,7 @@ python3 scripts/token-estimate.py --current   # aktif profilin maliyeti
 
 ```bash
 pip install pytest
-pytest -q                    # 14 server import + 225 tool sayım guard'ı + validator + benchmark
+pytest -q                    # 14 server import + 227 tool sayım guard'ı + validator + benchmark
 ```
 
 `tests/test_mcp_servers.py` her server'ı import eder, tool sayısını doğrular
@@ -448,4 +451,4 @@ Bu sistem **yalnızca yasal ve etik** güvenlik testi amaçlarıyla kullanılmal
 ---
 
 *Developed for ethical security research and CTF competitions.*
-*4.327 lines of Python orchestration → 0. MCP tools: 225 (14 server; deterministik validator + reasoning beyni + bug-hunting zekası dahil). Skills: 23. XBOW benchmark harness dahil. Model choices: unlimited.*
+*4.327 lines of Python orchestration → 0. MCP tools: 227 (14 server; deterministik validator + reasoning beyni + bug-hunting zekası dahil). Skills: 23. XBOW benchmark harness dahil. Model choices: unlimited.*

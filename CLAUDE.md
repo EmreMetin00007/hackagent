@@ -186,6 +186,8 @@ kalibre olur. **Memory'ye + lesson'a kayıt atlamak = beyin öğrenemez.**
 ```
 1) TAHMİN:   mcp__hunter__predict_vulnerabilities(target, fingerprint, context)
    → stack'e özel muhtemel sınıflar + CVE ailesi + RAG sorgusu + hangi skill/validator
+1b) PoC ÇEK: mcp__hunter__enrich_with_rag(target, fingerprint)   ← predict→rag-engine köprüsü
+   → tahmin CVE'lerini RAG'da ara (inline) + ingest_plan (rag_ingest_cve/exploitdb) → somut PoC
 2) KAPSAMA:  mcp__hunter__coverage_report(target)
    → (endpoint × vuln-class) test edildi/edilmedi + 'access_control'/'business_logic' KÖR NOKTASI?
 3) ERİŞİM KONTROLÜ (en yüksek ödül — OWASP API #1/#5):
@@ -196,8 +198,9 @@ kalibre olur. **Memory'ye + lesson'a kayıt atlamak = beyin öğrenemez.**
       → owner-vs-attacker FARKSAL ORACLE: aynı 2xx içerik = yetki ihlali KANITI (FP guard)
 4) İŞ MANTIĞI: mcp__hunter__generate_abuse_cases(target, endpoint, params, context)
    → fiyat/miktar/rol/kupon/iş-akışı/race kötüye-kullanım senaryoları
-5) ÇOĞALT:    mcp__hunter__hunt_variants(finding_type, target, param, endpoint)
-   → doğrulanan bug'ı kardeş param/endpoint/method/content-type/subdomain'de sistematik ara
+5) ÇOĞALT (OTOMATİK):  mcp__hunter__auto_fanout_variants(finding_type, target, param, endpoint, live=True)
+   → doğrulanan bug'ın varyantlarını kali-tools curl ile çalıştırır + triage oracle;
+     umut verenleri validator'a devreder (live=False → çalıştırılacak curl+validator PLANI)
 6) KAYDET:    store_finding + record_lesson(worked=?) + exploitability_score → coverage_report (% arttı mı?)
 ```
 
@@ -356,7 +359,7 @@ uygundur.
 
 ---
 
-## 🧩 MCP Araç Ekosistemi (225 tool, 14 server)
+## 🧩 MCP Araç Ekosistemi (227 tool, 14 server)
 
 | Server | Araçlar | Öne çıkanlar |
 |--------|---|--------------|
@@ -365,7 +368,7 @@ uygundur.
 | `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
 | `validator` | 13 | **Deterministik exploit doğrulama (XBOW-tarzı):** `validate_sqli`, `validate_ssti`, `validate_command_injection`, `validate_path_traversal`, `validate_xss_reflection`, `validate_open_redirect`, `validate_ssrf_oob`, `confirm_oob_callback`, `validate_xxe`, `validate_auth_bypass`, `validate_idor`, `validate_finding`, `generate_validation_report` |
 | `reasoning` | 19 | **Biliş/beyin katmanı:** `deep_think` (bayrak gemisi — recon→zincir→doğrula→skorla orkestratörü), `plan_attack_tree` (Bayesçi EV + ToT), `next_best_action`, `reason_reflexion` (actor↔critic), `critic_review`, `record_lesson`, `recall_lessons`, `lesson_stats` (kalıcı öğrenme) · **Kill-Chain:** `compose_attack_chains` (SSRF→IMDS→RCE), `kill_chain_report` · **Payload Evo:** `evolve_payload` (WAF bypass), `record_payload_result` · `exploitability_score` (kalibre güven) · `recommend_skills` (fingerprint→/skill router) · **Reverse-Proxy + WAF:** `fingerprint_waf`, `classify_response`, `discover_origin` (CDN arkası origin IP), `adaptive_evasion_step` (kapalı-döngü evasion), `verify_origin` |
-| `hunter` 🆕 | 6 | **BUG-HUNTING ZEKASI (tarayıcıların kaçırdığı yüksek-ödüllü sınıflar):** `predict_vulnerabilities` (tech parmak izi → muhtemel sınıf + CVE ailesi + hedefli hipotez + RAG sorgusu), `build_authz_matrix` (anon/userA/userB/admin × kaynaklar **BOLA/BFLA/IDOR farksal test matrisi**), `analyze_authz_result` (owner-vs-attacker **farksal ORACLE** → yetki ihlali deterministik kanıtı), `generate_abuse_cases` (fiyat/miktar/rol/kupon/iş-akışı/race **business-logic abuse**), `hunt_variants` (doğrulanan bug'ı kardeş param/endpoint/method/subdomain'de **çoğalt**), `coverage_report` (attack-surface × vuln-class **kapsama + kör nokta = kaçırılan bug guard**) |
+| `hunter` 🆕 | 8 | **BUG-HUNTING ZEKASI (tarayıcıların kaçırdığı yüksek-ödüllü sınıflar):** `predict_vulnerabilities` (tech parmak izi → muhtemel sınıf + CVE ailesi + hedefli hipotez + RAG sorgusu), `build_authz_matrix` (anon/userA/userB/admin × kaynaklar **BOLA/BFLA/IDOR farksal test matrisi**), `analyze_authz_result` (owner-vs-attacker **farksal ORACLE** → yetki ihlali deterministik kanıtı), `generate_abuse_cases` (fiyat/miktar/rol/kupon/iş-akışı/race **business-logic abuse**), `hunt_variants` (doğrulanan bug'ı kardeş param/endpoint/method/subdomain'de **çoğalt**), `coverage_report` (attack-surface × vuln-class **kapsama + kör nokta = kaçırılan bug guard**), `auto_fanout_variants` (varyantları **otomatik çalıştır+doğrula** → `mcp__kali-tools__curl_request` + `mcp__validator__*` köprüsü; PLAN/LIVE mod), `enrich_with_rag` (predict çıktısını **`mcp__rag-engine__*`**'e besle → CVE PoC/exploit retrieval) |
 | `ad-tools` | 12 | Kerberos (AS-REP roast/Kerberoast), SMB/NTLM enum, BloodHound veri toplama, lateral movement |
 | `memory-server` | 10 | `store_finding`, `store_credential`, `store_endpoint`, `query_attack_paths`, `suggest_next_action`, `add_relationship` |
 | `container-tools` | 10 | Container escape, K8s RBAC escalation, secret dump, privileged pod, Helm chart analizi |

@@ -207,3 +207,92 @@ def test_coverage_empty_advises():
     mod = _h()
     out = json.loads(mod.coverage_report(target="no-such-target-xyz"))
     assert "advice" in out
+
+
+# ───────────────────────── H6 auto_fanout_variants ─────────────────────────
+def test_fanout_plan_mode_offline():
+    _no_llm()
+    mod = _h()
+    out = json.loads(mod.auto_fanout_variants(
+        finding_type="sql_injection", target="https://t/item?id=1",
+        param="id", endpoint="https://t/item?id=1"))
+    assert out["mode"] == "PLAN"
+    assert out["validator_hook"] == "mcp__validator__validate_sqli"
+    assert out["variants"] > 0
+    assert out["executed_live"] == 0
+    f0 = out["fanout"][0]
+    assert f0["curl"].startswith("curl -sk")
+    assert "mcp__validator__validate_sqli" in f0["validator_followup"]
+
+
+def test_fanout_destructive_skipped_live():
+    _no_llm()
+    mod = _h()
+    out = json.loads(mod.auto_fanout_variants(
+        finding_type="command_injection", target="https://t/x", endpoint="https://t/x",
+        live=True))
+    # yıkıcı sınıf → canlı koşum atlanır (network'e gidilmez)
+    assert out["executed_live"] == 0
+    assert any("skipped_live" in v for v in out["fanout"])
+
+
+def test_fanout_live_reflection_xss():
+    """Loopback yansıtan sunucuya karşı canlı XSS triage (deterministik)."""
+    _no_llm()
+    mod = _h()
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import urlparse as _up, parse_qs
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            q = parse_qs(_up(self.path).query)
+            val = (q.get("q") or q.get("search") or [""])[0]
+            body = f"<html>echo: {val}</html>".encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        url = f"http://127.0.0.1:{port}/?q=1"
+        out = json.loads(mod.auto_fanout_variants(
+            finding_type="xss_reflected", target=url, param="q", endpoint=url,
+            live=True, max_requests=5))
+        assert out["mode"] == "LIVE"
+        assert out["executed_live"] > 0
+        # yansıyan payload → en az bir LIKELY
+        assert len(out["likely_hits"]) >= 1
+    finally:
+        srv.shutdown()
+
+
+# ───────────────────────── H7 enrich_with_rag ─────────────────────────
+def test_enrich_extracts_cves_and_plan():
+    _no_llm()
+    mod = _h()
+    out = json.loads(mod.enrich_with_rag(fingerprint="Laravel Apache 2.4.49 Struts2 PHP"))
+    # Laravel CVE-2021-3129, Apache CVE-2021-41773, Struts CVE-2017-5638
+    assert "CVE-2021-3129" in out["cve_ids_found"]
+    assert "CVE-2021-41773" in out["cve_ids_found"]
+    assert any("rag_ingest_cve" in s for s in out["ingest_plan"])
+    assert any("rag_search" in s for s in out["search_plan"])
+    assert out["rag_db_ready"] is False           # izole CCO_HOME → henüz ingest yok
+
+
+def test_enrich_accepts_predictions_json():
+    _no_llm()
+    mod = _h()
+    pred = mod.predict_vulnerabilities(fingerprint="Jenkins")
+    out = json.loads(mod.enrich_with_rag(predictions_json=pred))
+    assert out["enriched_predictions"]
+    assert "CVE-2018-1000861" in out["cve_ids_found"]
+
