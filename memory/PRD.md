@@ -35,6 +35,28 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — Canlı Lab Doğrulaması (`mcp-hunter` uçtan uca, live=True)
+
+Kullanıcı isteği: "Gerçek hedef koşusu — `auto_fanout_variants(live=True)` ve `enrich_with_rag`
+zincirini canlı doğrula (RAG'ı önce ingest ile doldur)." Ortam Kali değil cloud container
+olduğundan ve yetkisiz dış hedefe araç yöneltmek yasak/etik dışı olduğundan, **eşdeğer güvenli
+doğrulama**: loopback'te kasıtlı-zafiyetli lab hedefi + tam zincirin gerçek HTTP koşumu.
+
+- **`scripts/lab/vuln_lab.py`** — stdlib, 127.0.0.1-only kasıtlı-zafiyetli hedef: yansıyan XSS
+  (`/search`), hata-tabanlı SQLi (`/item`), BOLA (`/api/orders/<id>` — Authorization yok sayılır),
+  BFLA/unauth (`/admin/export`), iş mantığı (`/checkout` negatif fiyat).
+- **`scripts/lab-validate.py` + `.sh`** — harness: lab'ı başlat → memory endpoint seed → RAG'ı
+  `rag_ingest_writeup` ile DOLDUR → enrich_with_rag (inline PoC hit) → predict → coverage →
+  build_authz_matrix + **canlı GET** + analyze_authz_result → generate_abuse_cases + canlı
+  negatif-fiyat → auto_fanout_variants(live=True) XSS+SQLi. PASS/FAIL özet + exit kodu.
+- **Sonuç: 9/9 PASS** (chromadb 1.5.9 kuruldu). Kanıtlananlar: RAG inline hit (Apache CVE-2021-41773
+  writeup, rel=0.671) + CVE çıkarımı; **BOLA CONFIRMED conf=0.92** (userB, userA'nın 1001 order'ını
+  gördü); **unauth admin CONFIRMED**; canlı negatif fiyat charged=-200; **XSS LIKELY** (payload ham
+  yansıdı) + **SQLi LIKELY** (SQL hata imzası). README'ye "Canlı Lab Doğrulaması" bölümü eklendi.
+- **Kali'de tekrar:** `bash scripts/lab-validate.sh`; gerçek hedefte vuln_lab yerine **yetkili**
+  kapsam + identity token'ları (`build_authz_matrix(identities=)`, `auto_fanout_variants(headers=)`).
+
+
 ### 2026-06-14 — `mcp-hunter` P1: Auto-Fanout (kali-tools) + RAG Enrichment (rag-engine)
 
 Kullanıcı isteği: "`hunt_variants`'ı kali-tools'a auto-fanout olarak bağla (doğrulanan bug →

@@ -379,8 +379,27 @@ pytest -q                    # 14 server import + 227 tool sayım guard'ı + val
 `tests/test_mcp_servers.py` her server'ı import eder, tool sayısını doğrular
 (yeni tool eklerken `EXPECTED_TOOL_COUNTS` güncellenmeli) ve metadata + pure-function
 temel çağrılarını test eder. `tests/test_validator.py` deterministik oracle'ları,
-`tests/test_reasoning.py` reasoning beynini (EV/öğrenme/plan), `tests/test_xbow_benchmark.py`
-benchmark harness'ını (mock) doğrular. Tamamen offline çalışır.
+`tests/test_reasoning.py` reasoning beynini (EV/öğrenme/plan), `tests/test_hunter.py`
+bug-hunting zekasını (predict/authz/abuse/variant/coverage/fanout/RAG),
+`tests/test_xbow_benchmark.py` benchmark harness'ını (mock) doğrular. Tamamen offline çalışır.
+
+### 🔬 Canlı Lab Doğrulaması (`mcp-hunter` uçtan uca)
+
+Kasıtlı-zafiyetli bir **loopback** hedefe (`scripts/lab/vuln_lab.py`) karşı tüm hunter
+zincirini **gerçekten** (`live=True`) koşturur — sadece `127.0.0.1`, yetkisiz/gerçek hedefe
+dokunmaz. Kali'de de aynen çalışır:
+
+```bash
+bash scripts/lab-validate.sh        # veya: python3 scripts/lab-validate.py
+```
+
+Doğruladıkları (9/9): `enrich_with_rag` inline PoC hit (RAG önce `rag_ingest_writeup` ile
+doldurulur) + CVE çıkarımı · `predict_vulnerabilities` · `coverage_report` kör nokta ·
+`build_authz_matrix`→**canlı**→`analyze_authz_result` ile **BOLA + unauth admin CONFIRMED** ·
+`generate_abuse_cases` + canlı negatif-fiyat iş mantığı · `auto_fanout_variants(live=True)`
+ile **XSS + SQLi LIKELY** triage. Gerçek hedefte: `scripts/lab/vuln_lab.py` yerine kendi
+**yetkili** kapsamını koy, identity token'larını `auto_fanout_variants(headers=...)` /
+`build_authz_matrix(identities=...)`'a ver.
 
 ---
 
