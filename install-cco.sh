@@ -293,11 +293,7 @@ mcp_servers = {
     "reasoning": {
         "command": "python3",
         "args": ["$CCO_DIR/mcp-servers/mcp-reasoning/server.py"],
-        "env": {
-            "CCO_HOME": "$CCO_DATA_DIR",
-            "CCO_REASON_MODEL": "qwen/qwen3.6-plus",
-            "CCO_CRITIC_MODEL": "nousresearch/hermes-4-405b"
-        }
+        "env": {"CCO_HOME": "$CCO_DATA_DIR"}
     }
 }
 

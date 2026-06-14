@@ -150,6 +150,11 @@ mcp__reasoning__lesson_stats()
 önceliklerine otomatik karışır → beyin zamanla bu ajanın gerçek deneyimine göre
 kalibre olur. **Memory'ye + lesson'a kayıt atlamak = beyin öğrenemez.**
 
+> **LLM sağlayıcı:** `DEEPSEEK_API_KEY` ayarlıysa beyin otomatik DeepSeek'e geçer
+> (actor=`deepseek-reasoner`, critic=`deepseek-chat`); yoksa OpenRouter (Qwen/Hermes).
+> `CCO_REASON_MODEL`/`CCO_CRITIC_MODEL` ile override edilebilir. Anahtarlar env/
+> `~/.cco/config.yaml`'dan okunur — asla koda gömülmez.
+
 ---
 
 ## 🎯 HER GÖREV İÇİN PROTOKOL

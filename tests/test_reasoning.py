@@ -153,3 +153,64 @@ def test_deep_think_offline_combines_pillars():
         for k, v in saved.items():
             if v is not None:
                 os.environ[k] = v
+
+
+# ───────────────────── DeepSeek sağlayıcı entegrasyonu (offline) ─────────────────────
+def _clear_all_keys():
+    return {k: os.environ.pop(k, None)
+            for k in ("OPENROUTER_API_KEY", "ANTHROPIC_AUTH_TOKEN", "DEEPSEEK_API_KEY",
+                      "CCO_REASON_MODEL", "CCO_CRITIC_MODEL")}
+
+
+def _restore(saved):
+    for k, v in saved.items():
+        os.environ.pop(k, None)
+        if v is not None:
+            os.environ[k] = v
+
+
+def test_provider_routing_by_model_name():
+    mod = _r()
+    saved = _clear_all_keys()
+    try:
+        os.environ["DEEPSEEK_API_KEY"] = "sk-test-fake"
+        prov, url, key = mod._provider_for("deepseek-reasoner")
+        assert prov == "deepseek"
+        assert url == mod.DEEPSEEK_URL
+        assert "api.deepseek.com" in url
+        assert key == "sk-test-fake"
+        prov2, url2, _ = mod._provider_for("qwen/qwen3.6-plus")
+        assert prov2 == "openrouter" and url2 == mod.OPENROUTER_URL
+    finally:
+        _restore(saved)
+
+
+def test_models_auto_switch_to_deepseek_when_key_present():
+    mod = _r()
+    saved = _clear_all_keys()
+    try:
+        # key yok → Qwen/Hermes varsayılan
+        assert mod.reason_model() == "qwen/qwen3.6-plus"
+        assert mod.critic_model() == "nousresearch/hermes-4-405b"
+        # DeepSeek key var → beyin DeepSeek'e geçer (reasoner=actor, chat=critic)
+        os.environ["DEEPSEEK_API_KEY"] = "sk-test-fake"
+        assert mod.reason_model() == "deepseek-reasoner"
+        assert mod.critic_model() == "deepseek-chat"
+        assert mod._any_llm_key() is True
+        # açık override her zaman kazanır
+        os.environ["CCO_REASON_MODEL"] = "deepseek-v4-pro"
+        assert mod.reason_model() == "deepseek-v4-pro"
+    finally:
+        _restore(saved)
+
+
+def test_chat_no_key_returns_no_api_key():
+    mod = _r()
+    saved = _clear_all_keys()
+    try:
+        # DeepSeek modeli ama DeepSeek key yok → network'e gitmeden no_api_key
+        text, err = mod._chat("deepseek-reasoner", "sys", "user")
+        assert text is None and err == "no_api_key"
+        assert mod._any_llm_key() is False
+    finally:
+        _restore(saved)

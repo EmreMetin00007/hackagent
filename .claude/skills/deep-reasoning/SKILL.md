@@ -64,4 +64,6 @@ deep_think → validate (deterministik) → exploit → record_lesson(worked=?)
 - Reflexion onayı ≠ kanıt; **validator** olmadan "kesin" deme.
 - Her denemeyi `record_lesson` ile kaydet — atlanırsa beyin öğrenemez.
 - Modeller env ile güçlendirilebilir: `CCO_REASON_MODEL`, `CCO_CRITIC_MODEL`
-  (örn. daha güçlü reasoning modeline geç). LLM yoksa EV/dersler yine çalışır.
+  (örn. daha güçlü reasoning modeline geç). **DeepSeek desteklenir:** `DEEPSEEK_API_KEY`
+  ayarlıysa beyin otomatik DeepSeek'e geçer (actor=`deepseek-reasoner`, critic=`deepseek-chat`);
+  yoksa OpenRouter Qwen/Hermes. LLM yoksa EV/dersler yine çalışır.

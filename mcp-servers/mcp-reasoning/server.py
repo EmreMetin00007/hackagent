@@ -19,10 +19,11 @@ Reflexion, deterministik validator ile doğrular → sonuç tekrar derse döner.
   ⚡ deep_think — bayrak gemisi: recall_lessons → plan_attack_tree → seçilen yola
       Reflexion/critique → deneyimle beslenmiş, kendini eleştirmiş somut aksiyon planı.
 
-LLM servisi mevcut OpenRouter entegrasyonunu (kali-tools ile aynı) kullanır.
-Modeller env ile değiştirilebilir: CCO_REASON_MODEL (actor/planner),
-CCO_CRITIC_MODEL (critic). API key yoksa deterministik kısımlar (EV, dersler,
-graph) yine çalışır; LLM kısımları graceful fallback verir.
+LLM servisi: DeepSeek (DEEPSEEK_API_KEY varsa otomatik) veya OpenRouter. Modeller
+env ile değiştirilebilir: CCO_REASON_MODEL (actor/planner), CCO_CRITIC_MODEL (critic).
+DeepSeek seçildiğinde varsayılan actor=deepseek-reasoner, critic=deepseek-chat.
+API key yoksa deterministik kısımlar (EV, dersler, graph) yine çalışır; LLM kısımları
+graceful fallback verir.
 """
 import os
 import re
@@ -41,9 +42,11 @@ MEM_DB = os.path.join(CCO_HOME, "agent_memory.db")
 LESSONS_DB = os.path.join(CCO_HOME, "lessons.db")
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# Actor/planner ve critic için ayrı modeller (çeşitlilik daha iyi eleştiri verir).
-REASON_MODEL = os.environ.get("CCO_REASON_MODEL") or os.environ.get("CCO_ANALYZE_MODEL", "qwen/qwen3.6-plus")
-CRITIC_MODEL = os.environ.get("CCO_CRITIC_MODEL") or os.environ.get("CCO_EXPLOIT_MODEL", "nousresearch/hermes-4-405b")
+# DeepSeek OpenAI-uyumlu endpoint (api-docs.deepseek.com). base: https://api.deepseek.com
+DEEPSEEK_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/") + "/chat/completions"
+# DeepSeek model adları (legacy ad → v4-flash non-thinking/thinking; env ile override).
+DEEPSEEK_REASONER = os.environ.get("CCO_DEEPSEEK_REASON_MODEL", "deepseek-reasoner")
+DEEPSEEK_CHAT = os.environ.get("CCO_DEEPSEEK_CHAT_MODEL", "deepseek-chat")
 
 mcp = FastMCP(
     "reasoning",
@@ -53,8 +56,28 @@ mcp = FastMCP(
 )
 
 
-# ─────────────────────────── OpenRouter yardımcısı ───────────────────────────
-def _api_key() -> str:
+# ─────────────────────── Sağlayıcı (provider) yardımcıları ───────────────────────
+def _config_value(*keys):
+    """~/.cco/config.yaml veya settings.json içinden iç içe anahtar okur."""
+    for path in (os.path.join(CCO_HOME, "config.yaml"), os.path.join(CCO_HOME, "settings.json")):
+        try:
+            if not os.path.exists(path):
+                continue
+            if path.endswith((".yaml", ".yml")):
+                import yaml
+                data = yaml.safe_load(open(path)) or {}
+            else:
+                data = json.load(open(path))
+            for k in keys:
+                v = data.get("llm", {}).get(k) or data.get(k)
+                if v:
+                    return v
+        except Exception:
+            pass
+    return ""
+
+
+def _openrouter_key() -> str:
     key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
     if key:
         return key
@@ -65,39 +88,71 @@ def _api_key() -> str:
             return key
     except Exception:
         pass
-    for path in (os.path.join(CCO_HOME, "config.yaml"), os.path.join(CCO_HOME, "settings.json")):
-        try:
-            if os.path.exists(path):
-                if path.endswith((".yaml", ".yml")):
-                    import yaml
-                    data = yaml.safe_load(open(path)) or {}
-                    key = data.get("llm", {}).get("openrouter_api_key") or data.get("openrouter_api_key", "")
-                else:
-                    key = json.load(open(path)).get("openrouter_api_key", "")
-                if key:
-                    return key
-        except Exception:
-            pass
-    return ""
+    return _config_value("openrouter_api_key")
+
+
+def _deepseek_key() -> str:
+    """DeepSeek API anahtarı — env > keyring > config. Asla koda gömülmez."""
+    key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if key:
+        return key
+    try:
+        import keyring
+        key = keyring.get_password("cco", "deepseek")
+        if key:
+            return key
+    except Exception:
+        pass
+    return _config_value("deepseek_api_key")
+
+
+# Geriye uyumluluk
+def _api_key() -> str:
+    return _openrouter_key()
+
+
+def _any_llm_key() -> bool:
+    return bool(_deepseek_key() or _openrouter_key())
+
+
+def _provider_for(model: str):
+    """Model adına göre (provider, url, key) seç. 'deepseek*' → DeepSeek; aksi → OpenRouter."""
+    if (model or "").lower().startswith("deepseek"):
+        return "deepseek", DEEPSEEK_URL, _deepseek_key()
+    return "openrouter", OPENROUTER_URL, _openrouter_key()
+
+
+def reason_model() -> str:
+    """Actor/planner modeli — açık override > DeepSeek (key varsa) > Qwen."""
+    return os.environ.get("CCO_REASON_MODEL") or (DEEPSEEK_REASONER if _deepseek_key() else "qwen/qwen3.6-plus")
+
+
+def critic_model() -> str:
+    """Critic modeli — actor'dan farklı tutulur (çeşitlilik = daha sert eleştiri)."""
+    return os.environ.get("CCO_CRITIC_MODEL") or (DEEPSEEK_CHAT if _deepseek_key() else "nousresearch/hermes-4-405b")
 
 
 def _chat(model: str, system: str, user: str, temperature: float = 0.4,
-          max_tokens: int = 1300, timeout: int = 90):
-    """OpenRouter chat completion. Returns (text, error)."""
-    key = _api_key()
+          max_tokens: int = 1300, timeout: int = 120):
+    """Sağlayıcı-agnostik chat completion (OpenRouter veya DeepSeek). (text, error) döner.
+    DeepSeek reasoning yanıtındaki 'reasoning_content' yok sayılır; yalnızca final
+    'content' kullanılır (reasoning_content'i mesaj geçmişine geri koymak 400 verir)."""
+    provider, url, key = _provider_for(model)
     if not key:
         return None, "no_api_key"
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
-               "HTTP-Referer": "https://cco.local", "X-Title": "CCO Reasoning"}
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    if provider == "openrouter":
+        headers.update({"HTTP-Referer": "https://cco.local", "X-Title": "CCO Reasoning"})
     data = {"model": model, "temperature": temperature, "max_tokens": max_tokens,
+            "stream": False,
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}]}
     try:
-        r = requests.post(OPENROUTER_URL, headers=headers, json=data, timeout=timeout)
+        r = requests.post(url, headers=headers, json=data, timeout=timeout)
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"], None
     except Exception as e:
-        return None, str(e)
+        return None, f"{provider}: {e}"
 
 
 # ═══════════════════════════ Bayesçi teknik kataloğu ═══════════════════════════
@@ -367,9 +422,9 @@ def plan_attack_tree(target: str = "", scope: str = "", expand: bool = True) -> 
                "technical. Output short bullet chains.")
         usr = (f"Target: {target}\nScope: {scope}\nTop EV vectors:\n" +
                "\n".join(f"- {a['technique']} (EV={a['ev']}, {a['rationale']})" for a in top))
-        narrative, err = _chat(REASON_MODEL, sys, usr, temperature=0.5, max_tokens=900)
+        narrative, err = _chat(reason_model(), sys, usr, temperature=0.5, max_tokens=900)
         result["tot_narrative"] = narrative
-        result["tot_model"] = REASON_MODEL if narrative else None
+        result["tot_model"] = reason_model() if narrative else None
         if err:
             result["tot_note"] = f"LLM genişletme yok ({err}); deterministik sıralama geçerli."
     return json.dumps(result, indent=2, ensure_ascii=False)
@@ -413,7 +468,7 @@ def critic_review(artifact: str, kind: str = "exploit", context: str = "") -> st
            "needs, OPSEC and reproducibility. Be specific. End with a line "
            "'VERDICT: APPROVED' or 'VERDICT: REVISE' and a confidence 0-1.")
     usr = f"Kind: {kind}\nContext: {context}\n\nARTIFACT:\n{artifact}"
-    out, err = _chat(CRITIC_MODEL, sys, usr, temperature=0.3, max_tokens=900)
+    out, err = _chat(critic_model(), sys, usr, temperature=0.3, max_tokens=900)
     if out is None:
         return json.dumps({
             "critic_model": None, "verdict": "REVIEW_MANUALLY",
@@ -423,7 +478,7 @@ def critic_review(artifact: str, kind: str = "exploit", context: str = "") -> st
     verdict = "APPROVED" if re.search(r"VERDICT:\s*APPROVED", out, re.I) else "REVISE"
     mconf = re.search(r"([01](?:\.\d+)?)\s*$", out.strip())
     return json.dumps({
-        "critic_model": CRITIC_MODEL, "kind": kind, "verdict": verdict,
+        "critic_model": critic_model(), "kind": kind, "verdict": verdict,
         "confidence": float(mconf.group(1)) if mconf else None,
         "critique": out,
     }, indent=2, ensure_ascii=False)
@@ -444,11 +499,12 @@ def reason_reflexion(task: str, target: str = "", context: str = "",
         max_iters: Maksimum actor↔critic turu (1-5)
     """
     max_iters = max(1, min(int(max_iters), 5))
-    if not _api_key():
+    if not _any_llm_key():
         return json.dumps({
             "approved": False, "llm_error": "no_api_key",
             "static_checklist": _static_critique(artifact_kind),
-            "note": "LLM yok — OPENROUTER_API_KEY ayarla. Statik kontrol listesiyle elle yürüt.",
+            "note": "LLM yok — DEEPSEEK_API_KEY veya OPENROUTER_API_KEY ayarla. "
+                    "Statik kontrol listesiyle elle yürüt.",
         }, indent=2, ensure_ascii=False)
 
     actor_sys = ("You are an elite exploit developer in an authorized lab. Produce a "
@@ -457,16 +513,17 @@ def reason_reflexion(task: str, target: str = "", context: str = "",
     critic_sys = ("You are a ruthless reviewer. Find every flaw, false-positive risk, "
                   "target-mismatch, missing step. End with 'VERDICT: APPROVED' or "
                   "'VERDICT: REVISE'.")
+    actor_m, critic_m = reason_model(), critic_model()
     iterations, draft, critique = [], "", ""
     approved = False
     for i in range(max_iters):
         actor_usr = (f"Task: {task}\nTarget: {target}\nContext: {context}\n" +
                      (f"\nPrior critique to fix:\n{critique}" if critique else ""))
-        draft, err = _chat(REASON_MODEL, actor_sys, actor_usr, temperature=0.5, max_tokens=1100)
+        draft, err = _chat(actor_m, actor_sys, actor_usr, temperature=0.5, max_tokens=1100)
         if draft is None:
             iterations.append({"iter": i + 1, "error": err})
             break
-        critique, cerr = _chat(CRITIC_MODEL, critic_sys,
+        critique, cerr = _chat(critic_m, critic_sys,
                                f"Task: {task}\nTarget: {target}\n\nARTIFACT:\n{draft}",
                                temperature=0.3, max_tokens=700)
         approved = bool(critique) and bool(re.search(r"VERDICT:\s*APPROVED", critique, re.I))
@@ -480,7 +537,7 @@ def reason_reflexion(task: str, target: str = "", context: str = "",
         "task": task, "approved": approved, "rounds": len(iterations),
         "final_artifact": draft, "iterations": iterations,
         "recommended_validation": VALIDATE_WITH.get(tech, "mcp__validator__validate_finding"),
-        "actor_model": REASON_MODEL, "critic_model": CRITIC_MODEL,
+        "actor_model": actor_m, "critic_model": critic_m,
         "note": "Onaylandıysa bile mcp__validator ile deterministik doğrula, sonra record_lesson.",
     }, indent=2, ensure_ascii=False)
 
@@ -625,7 +682,7 @@ def deep_think(task: str, target: str = "", scope: str = "", context: str = "",
     if chosen:
         out["validator_hook"] = chosen.get("validate_with")
         out["recommended_tool"] = chosen.get("recommended_tool")
-        if reflexion and _api_key():
+        if reflexion and _any_llm_key():
             refl = json.loads(reason_reflexion(
                 task=f"{task} — primary vector: {chosen['technique']}",
                 target=target,

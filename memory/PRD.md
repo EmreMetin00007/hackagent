@@ -35,6 +35,30 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — DeepSeek entegrasyonu (reasoning beyni için güçlü provider)
+
+**Tetik:** Kullanıcı kendi DeepSeek API anahtarını verdi; reasoning beynini güçlü bir
+reasoning modeliyle çalıştırmak istedi. (Güvenlik: anahtar açık paylaşıldı → kullanıcıya
+rotate etmesi söylendi; anahtar hiçbir dosyaya/commit'e yazılmadı.)
+
+**Yapılanlar (integration_expert playbook'una göre, OpenAI-uyumlu):**
+- `mcp-reasoning` server'ı **provider-aware** yapıldı. `_provider_for(model)` model adına
+  göre yönlendirir: `deepseek*` → `https://api.deepseek.com/chat/completions` (Bearer
+  DEEPSEEK_API_KEY), aksi → OpenRouter. `_chat()` her iki sağlayıcıyı destekler;
+  DeepSeek reasoning yanıtındaki `reasoning_content` yok sayılır (yalnızca final content).
+- **Otomatik geçiş:** `DEEPSEEK_API_KEY` varsa beyin otomatik DeepSeek'e geçer →
+  actor/planner=`deepseek-reasoner`, critic=`deepseek-chat`. Yoksa OpenRouter Qwen/Hermes.
+  `CCO_REASON_MODEL`/`CCO_CRITIC_MODEL` açık override kazanır. Anahtar env > keyring >
+  `~/.cco/config.yaml`'dan okunur — koda gömülmez. install-cco.sh reasoning env block'undan
+  hardcode model'ler kaldırıldı (auto-detect için).
+- README/CLAUDE.md/skill güncellendi (DeepSeek varsayılan provider notu + anahtar saklama uyarısı).
+
+**Doğrulama:** ✅ Offline: 3 yeni provider testi (routing, model auto-switch, no-key fallback).
+✅ CANLI smoke (kullanıcı anahtarı, inline): `deepseek-chat` → "CCO_DEEPSEEK_OK"; tam Reflexion
+döngüsü `deepseek-reasoner`(actor)+`deepseek-chat`(critic) → XSS PoC üretip critic REVISE verdi,
+`validate_xss_reflection` önerdi. `pytest -q` → **68 passed, 1 skipped.**
+
+
 ### 2026-06-14 — Reasoning Beyni: güçlü LLM çekirdeği (Reflexion + Bayesçi plan + öğrenme)
 
 **Kullanıcı seçimi:** 1a (Reflexion) + 1d (saldırı planlama motoru) + 1e (kalıcı öğrenme),
