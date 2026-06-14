@@ -1,8 +1,8 @@
 # 🔴 CCO — Claude Code Offensive Operator
 
 > Otonom bug bounty avcısı & CTF çözücü. **Claude Code CLI** orkestrasyonu,
-> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **12 MCP server** ile 200
-> güvenlik aracı (deterministik exploit **validator** dahil). Kali Linux için.
+> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **13 MCP server** ile 208
+> güvenlik aracı (deterministik **validator** + **reasoning beyni** dahil). Kali Linux için.
 
 **v3.1 HackerAgent → v2.0 CCO geçişi:** 4.327 satır Python orkestrasyon kodu
 silindi; tüm orkestrasyon Claude Code'a bırakıldı. Sadece MCP tool'lar, skills,
@@ -26,7 +26,7 @@ chmod +x install-cco.sh
 - ✅ Claude Code CLI kurulumu (npm -g @anthropic-ai/claude-code)
 - ✅ `~/.cco/` veri dizini (DB, loglar, RAG, approvals)
 - ✅ `.env` dosyası (OpenRouter yönlendirmesi)
-- ✅ `~/.claude.json` — 12 MCP server kaydı (mevcut dosya yedeklenir)
+- ✅ `~/.claude.json` — 13 MCP server kaydı (mevcut dosya yedeklenir)
 - ✅ (opsiyonel) RAG bilgi tabanını CVE/ExploitDB/payload ile doldurma
 
 ---
@@ -70,23 +70,24 @@ handle edilir ve modelden bağımsız olarak her zaman skill'i tetikler.
 │         Claude Code CLI                     │
 │  • Orkestrasyon, OODA loop, tool routing    │
 │  • CLAUDE.md → hacker persona + metodoloji  │
-│  • ~/.claude.json → 12 MCP server kaydı     │
+│  • ~/.claude.json → 13 MCP server kaydı     │
 └──────┬──────────────┬───────────────────────┘
        │              │
        ▼              ▼
 ┌────────────┐  ┌─────────────────────────────────┐
-│ OpenRouter │  │      MCP Server'lar (12)        │
+│ OpenRouter │  │      MCP Server'lar (13)        │
 │   API      │  │  ┌──────────────────────────┐   │
 │            │  │  │ mcp-kali-tools  (76 tool) │   │
 │ Session:   │  │  │ mcp-web-advanced (25 tool)│   │
 │ qwen3-next │  │  │ mcp-ctf-platform (14 tool)│   │
 │ 80b-a3b    │  │  │ mcp-validator   (13 tool) │   │
 │            │  │  │ mcp-ad-tools    (12 tool) │   │
-│            │  │  │ mcp-memory-srv  (10 tool) │   │
-│ Tool içi:  │  │  │ mcp-container   (10 tool) │   │
-│ qwen3.6+,  │  │  │ mcp-osint-tools  (9 tool) │   │
-│ hermes-405 │  │  │ mcp-telemetry    (9 tool) │   │
+│ Tool içi:  │  │  │ mcp-memory-srv  (10 tool) │   │
+│ qwen3.6+,  │  │  │ mcp-container   (10 tool) │   │
+│ hermes-405 │  │  │ mcp-osint-tools  (9 tool) │   │
+│            │  │  │ mcp-telemetry    (9 tool) │   │
 │            │  │  │ mcp-browser      (9 tool) │   │
+│            │  │  │ mcp-reasoning    (8 tool) │   │
 │            │  │  │ mcp-rag-engine   (7 tool) │   │
 │            │  │  │ mcp-llm-security (6 tool) │   │
 │            │  │  └──────────────────────────┘   │
@@ -127,7 +128,7 @@ cco/
 ├── install-cco.sh               ← Tek komut kurulum
 ├── README.md
 │
-├── mcp-servers/                 ← 12 MCP server (200 tool)
+├── mcp-servers/                 ← 13 MCP server (208 tool)
 │   ├── mcp-kali-tools/          ← 76 güvenlik aracı + LLM tools
 │   ├── mcp-web-advanced/        ← 25 modern web/API saldırı aracı
 │   ├── mcp-ctf-platform/        ← 14 — CTFd/HTB/THM entegrasyonu
@@ -138,6 +139,7 @@ cco/
 │   ├── mcp-osint-tools/         ← 9 — pasif OSINT + password spraying
 │   ├── mcp-telemetry/           ← 9 — maliyet + call tracking
 │   ├── mcp-browser/             ← 9 — Playwright client-side recon (opsiyonel)
+│   ├── mcp-reasoning/           ← 8 — BEYİN: deep_think + Bayesçi plan + Reflexion + öğrenme
 │   ├── mcp-rag-engine/          ← 7 — ChromaDB CVE/exploit/writeup search
 │   └── mcp-llm-security/        ← 6 — OWASP LLM Top 10 (prompt inj./jailbreak)
 │
@@ -145,10 +147,11 @@ cco/
 │   ├── commands/                ← Custom slash command'lar
 │   │   ├── pwn.md               ←   /pwn <hedef> — otonom recon→exploit zinciri
 │   │   └── bugbounty.md         ←   /bugbounty <hedef> — bug bounty kampanyası
-│   └── skills/                  ← 21 Agent Skill (YAML frontmatter ile)
+│   └── skills/                  ← 22 Agent Skill (YAML frontmatter ile)
 │       ├── recon-enumeration/  attack-surface-mapping/  llm-security/
 │       ├── web-exploit/  web-advanced/  advanced-api-sec/
 │       ├── exploit-validation/ ← deterministik doğrulama metodolojisi
+│       ├── deep-reasoning/     ← derin düşünme: plan + reflexion + öğrenme (beyin)
 │       ├── binary-pwn/  crypto-forensics/  ctf-solver/
 │       ├── report-generator/  source-code-review/
 │       ├── active-directory/  windows-exploitation/
@@ -172,8 +175,9 @@ cco/
 │
 ├── tests/                       ← pytest smoke/regresyon suite
 │   ├── conftest.py
-│   ├── test_mcp_servers.py      ← 12 server import + 200 tool sayım guard
+│   ├── test_mcp_servers.py      ← 13 server import + 208 tool sayım guard
 │   ├── test_validator.py        ← deterministik validator oracle testleri
+│   ├── test_reasoning.py        ← reasoning beyni (EV/öğrenme/plan) testleri
 │   └── test_xbow_benchmark.py   ← benchmark harness (mock) testleri
 │
 ├── scripts/                     ← Yardımcılar
@@ -193,7 +197,7 @@ cco/
 
 ---
 
-## ⚙️ 12 MCP Server — 200 Tool
+## ⚙️ 13 MCP Server — 208 Tool
 
 | Server | Tool | Öne Çıkanlar |
 |--------|---|--------------|
@@ -207,13 +211,49 @@ cco/
 | `osint-tools` | 9 | `crtsh_subdomains`, `dns_recon`, `dns_zone_transfer`, `wayback_urls`, `rdap_whois`, `username_osint`, `github_code_search`, `password_spray_structured` |
 | `telemetry` | 9 | `log_tool_call`, `log_llm_call`, `get_cost_summary`, `get_savings_report`, `get_metrics_dashboard` |
 | `browser` | 9 | `browser_screenshot`, `browser_extract_links`, `browser_security_headers`, `browser_cookie_audit`, `browser_capture_requests`, `browser_console_logs`, `browser_dom_xss_probe` (Playwright) |
+| `reasoning` 🆕 | 8 | **Biliş/beyin katmanı:** `deep_think` (bayrak gemisi), `plan_attack_tree` (Bayesçi EV + tree-of-thought), `next_best_action`, `reason_reflexion` (actor↔critic self-correct), `critic_review`, `record_lesson`, `recall_lessons`, `lesson_stats` (kalıcı öğrenme) |
 | `rag-engine` | 7 | `rag_search`, `rag_similar_exploits`, `rag_ingest_cve`, `rag_ingest_exploitdb`, `rag_ingest_writeup`, `rag_bulk_ingest`, `rag_stats` (ChromaDB) |
 | `llm-security` | 6 | `llm_prompt_injection_probe`, `llm_system_prompt_leak`, `llm_jailbreak_test`, `llm_data_leak_probe`, `generate_injection_payloads`, `llm_owasp_top10_checklist` (OWASP LLM Top 10) |
 
-> Not: 12 server'ın tamamı `install-cco.sh` tarafından `~/.claude.json`'a
+> Not: 13 server'ın tamamı `install-cco.sh` tarafından `~/.claude.json`'a
 > otomatik kaydedilir. `browser` Playwright gerektirir (opsiyonel; yoksa net
 > hata mesajı döner). `rag-engine` ilk kullanımda boştur — install sırasında
 > (veya `python3 scripts/rag-bootstrap.py` ile) CVE/ExploitDB/payload ile doldurulur.
+
+---
+
+## 🧠 Reasoning Beyni — Güçlü LLM Çekirdeği 🆕
+
+CCO'nun zekası tek bir session modelinden ibaret değil. `mcp-reasoning` server'ı
+ajana gerçek bir **biliş katmanı** ekler — üç pilar birbirini besler:
+
+| Pilar | Ne yapar | Tool'lar |
+|---|---|---|
+| **1a Reflexion** | actor→critic→(validator)→retry: kendi exploit'ini eleştirir, başarısızsa öğrenip revize eder → halüsinasyonsuz | `reason_reflexion`, `critic_review` |
+| **1d Bayesçi planlama** | knowledge-graph'i okur, her vektörü beklenen-değer (EV) ile puanlar, tree-of-thought zinciri kurar | `plan_attack_tree`, `next_best_action` |
+| **1e Kalıcı öğrenme** | "neyin işe yaradığı" derslerini saklar; öğrenilen win-rate'ler planlayıcının önceliklerine karışır → **zamanla akıllanır** | `record_lesson`, `recall_lessons`, `lesson_stats` |
+
+**Bayrak gemisi — tek çağrı:**
+```
+mcp__reasoning__deep_think(task, target, scope, context)
+  → recall_lessons (geçmiş deneyim) + plan_attack_tree (Bayesçi EV) + reason_reflexion (self-correct)
+  → chosen_action.validate_with ile DOĞRULA → exploit → record_lesson
+```
+
+**Altın döngü (beynin akıllanması):**
+```
+deep_think → validator (deterministik) → exploit → record_lesson(worked=?)
+     ▲                                                        │
+     └──────── öğrenilen win-rate → EV priors'ı günceller ◄───┘
+```
+
+Modeller env ile güçlendirilebilir (LLM yoksa EV/öğrenme yine çalışır):
+```
+CCO_REASON_MODEL=qwen/qwen3.6-plus            # actor/planner (varsayılan)
+CCO_CRITIC_MODEL=nousresearch/hermes-4-405b   # critic (actor'dan farklı = daha sert eleştiri)
+# Daha güçlü reasoning için OpenRouter'da örn. gpt-oss-120b / deepseek-v4 ile override edilebilir
+```
+Detay: skill `deep-reasoning`.
 
 ---
 
@@ -253,27 +293,27 @@ Detaylı metodoloji: `workflows/benchmark-workflow.md`.
 ## 💸 Token Tasarrufu — MCP Profilleri
 
 Claude Code **her istekte tüm kayıtlı MCP server'ların tool şemalarını** context'e
-yükler — 12 server / 200 tool ≈ **~30.5K token/istek** (sadece şema). Göreve göre
-yalnızca ilgili server'ları yükleyerek istek başına 10-22K token tasarruf edilir.
+yükler — 13 server / 208 tool ≈ **~32K token/istek** (sadece şema). Göreve göre
+yalnızca ilgili server'ları yükleyerek istek başına 10-24K token tasarruf edilir.
 
 ```bash
 bash scripts/cco-profile.sh list      # profilleri + tahmini maliyeti gör
-bash scripts/cco-profile.sh llm       # sadece LLM-sec görevine geç (~8K, %73↓)
-bash scripts/cco-profile.sh web       # web + validator görevi (~24K, %21↓)
-bash scripts/cco-profile.sh full      # 12 server (varsayılan)
+bash scripts/cco-profile.sh llm       # sadece LLM-sec görevine geç (~8K, %74↓)
+bash scripts/cco-profile.sh web       # web + validator + reasoning görevi (~25K, %20↓)
+bash scripts/cco-profile.sh full      # 13 server (varsayılan)
 python3 scripts/token-estimate.py     # server + profil token tablosu
 python3 scripts/token-estimate.py --current   # aktif profilin maliyeti
 ```
 
 | Profil | Server | Tool | ~token/istek | Tasarruf |
 |--------|---|---|---|---|
-| `llm`   | 5 | 59 | ~8.2K  | **%73** |
-| `min`   | 3 | 95 | ~14.7K | %52 |
-| `recon` | 5 | 113 | ~17.4K | %43 |
-| `ctf`   | 6 | 129 | ~20.0K | %34 |
-| `ad`    | 5 | 117 | ~18.2K | %40 |
-| `web`   | 8 | 155 | ~23.9K | %21 |
-| `full`  | 12 | 200 | ~30.5K | %0 |
+| `llm`   | 5 | 59 | ~8.2K  | **%74** |
+| `min`   | 4 | 103 | ~16.2K | %49 |
+| `recon` | 6 | 121 | ~18.9K | %41 |
+| `ad`    | 6 | 125 | ~19.7K | %38 |
+| `ctf`   | 7 | 137 | ~21.5K | %33 |
+| `web`   | 9 | 163 | ~25.4K | %20 |
+| `full`  | 13 | 208 | ~32.0K | %0 |
 
 > Profil değişikliği **yeni bir `claude` oturumunda** etkili olur. Mevcut config
 > (doldurulmuş token'lar dahil) korunur; yalnızca `mcpServers` alanı güncellenir.
@@ -291,7 +331,8 @@ pytest -q                    # 12 server import + 200 tool sayım guard'ı + val
 `tests/test_mcp_servers.py` her server'ı import eder, tool sayısını doğrular
 (yeni tool eklerken `EXPECTED_TOOL_COUNTS` güncellenmeli) ve metadata + pure-function
 temel çağrılarını test eder. `tests/test_validator.py` deterministik oracle'ları,
-`tests/test_xbow_benchmark.py` benchmark harness'ını (mock) doğrular. Tamamen offline çalışır.
+`tests/test_reasoning.py` reasoning beynini (EV/öğrenme/plan), `tests/test_xbow_benchmark.py`
+benchmark harness'ını (mock) doğrular. Tamamen offline çalışır.
 
 ---
 
@@ -321,7 +362,7 @@ CCO_HOME=~/.cco
 ```
 
 ### `~/.claude.json` (install-cco.sh tarafından oluşturulur)
-12 MCP server'ın command/args/env tanımları. Mevcut dosya yedeklenir, sadece
+13 MCP server'ın command/args/env tanımları. Mevcut dosya yedeklenir, sadece
 `mcpServers` alanı güncellenir.
 
 ---
@@ -362,4 +403,4 @@ Bu sistem **yalnızca yasal ve etik** güvenlik testi amaçlarıyla kullanılmal
 ---
 
 *Developed for ethical security research and CTF competitions.*
-*4.327 lines of Python orchestration → 0. MCP tools: 200 (12 server, deterministik validator dahil). Skills: 21. XBOW benchmark harness dahil. Model choices: unlimited.*
+*4.327 lines of Python orchestration → 0. MCP tools: 208 (13 server; deterministik validator + reasoning beyni dahil). Skills: 22. XBOW benchmark harness dahil. Model choices: unlimited.*

@@ -27,6 +27,7 @@ Skill({"skill": "web-exploit"})            # SQLi/XSS/SSRF/LFI/SSTI/XXE/IDOR
 Skill({"skill": "web-advanced"})           # GraphQL/JWT/OAuth/smuggling
 Skill({"skill": "advanced-api-sec"})       # GraphQL/gRPC/REST/JWT derin API
 Skill({"skill": "exploit-validation"})     # Deterministik exploit doğrulama (validator)
+Skill({"skill": "deep-reasoning"})         # Derin düşünme: plan + reflexion + öğrenme (beyin)
 Skill({"skill": "llm-security"})            # Prompt injection/jailbreak/OWASP LLM
 Skill({"skill": "binary-pwn"})             # BOF/ROP/RE/pwn
 Skill({"skill": "crypto-forensics"})       # Hash/stego/PCAP/Volatility
@@ -121,6 +122,34 @@ mcp__validator__generate_validation_report(result_json)                      # X
 false-positive işaretle, başka vektör/encoding/WAF-bypass dene. Her doğrulama
 `~/.cco/validations/` altına reproducible audit-trail olarak yazılır.
 
+### Kural 6 — Karmaşık görevde önce DERİN DÜŞÜN (reasoning beyni)
+
+> CCO'nun zekası tek session modelinden ibaret değil. Yeni/karmaşık/belirsiz
+> görevde körlemesine tool çalıştırma — önce `mcp-reasoning` beynini kullan.
+
+```
+mcp__reasoning__deep_think(task, target, scope, context)
+  → recall_lessons (geçmişte ne işe yaradı) + plan_attack_tree (Bayesçi EV ile
+    en yüksek getirili yol) + reason_reflexion (actor↔critic self-correct)
+  → chosen_action.validate_with ile DOĞRULA → exploit → record_lesson
+```
+
+Pilar tool'ları:
+```
+mcp__reasoning__plan_attack_tree(target, scope)    # ToT + Bayesçi EV sıralı plan
+mcp__reasoning__next_best_action(target)           # tek en yüksek-EV aksiyon (hızlı)
+mcp__reasoning__reason_reflexion(task, target, context, artifact_kind, max_iters)
+mcp__reasoning__critic_review(artifact, kind)      # bağımsız critic (actor≠critic)
+mcp__reasoning__record_lesson(context, technique, action, outcome, worked, ...)
+mcp__reasoning__recall_lessons(context, technique, tags, k)
+mcp__reasoning__lesson_stats()
+```
+
+**Altın döngü:** her exploit denemesinden sonra (BAŞARI veya BAŞARISIZLIK)
+`record_lesson` çağır → öğrenilen win-rate'ler `plan_attack_tree`'nin Bayesçi
+önceliklerine otomatik karışır → beyin zamanla bu ajanın gerçek deneyimine göre
+kalibre olur. **Memory'ye + lesson'a kayıt atlamak = beyin öğrenemez.**
+
 ---
 
 ## 🎯 HER GÖREV İÇİN PROTOKOL
@@ -135,6 +164,7 @@ false-positive işaretle, başka vektör/encoding/WAF-bypass dene. Her doğrulam
 | Modern web + API (GraphQL/JWT/OAuth/SAML/smuggling/cache poisoning/WebSocket) | `Skill(skill="web-advanced")` veya `/web-advanced` |
 | Derin API güvenliği (GraphQL/gRPC/REST/JWT — T1190) | `Skill(skill="advanced-api-sec")` veya `/advanced-api-sec` |
 | Exploit DOĞRULAMA (bulguyu deterministik kanıtla — false-positive guard) | `Skill(skill="exploit-validation")` veya `/exploit-validation` |
+| DERİN DÜŞÜNME / plan / strateji / sonraki adım (karmaşık/belirsiz görev) | `Skill(skill="deep-reasoning")` veya `/deep-reasoning` (→ `deep_think`) |
 | AI/LLM uygulama güvenliği (prompt injection/jailbreak/system prompt leak — OWASP LLM Top 10) | `Skill(skill="llm-security")` veya `/llm-security` |
 | Binary exploit, RE, ROP, BOF, pwn, shellcode, Ghidra | `Skill(skill="binary-pwn")` veya `/binary-pwn` |
 | Kriptografi, hash crack, stego, forensics, PCAP, Volatility | `Skill(skill="crypto-forensics")` veya `/crypto-forensics` |
@@ -269,7 +299,7 @@ uygundur.
 
 ---
 
-## 🧩 MCP Araç Ekosistemi (200 tool, 12 server)
+## 🧩 MCP Araç Ekosistemi (208 tool, 13 server)
 
 | Server | Araçlar | Öne çıkanlar |
 |--------|---|--------------|
@@ -277,6 +307,7 @@ uygundur.
 | `web-advanced` | 25 | GraphQL inj., JWT saldırı, OAuth/SAML, smuggling, cache poison, prototype pollution, WebSocket fuzz, IDOR matrix, generate_stealth_curl |
 | `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
 | `validator` | 13 | **Deterministik exploit doğrulama (XBOW-tarzı):** `validate_sqli`, `validate_ssti`, `validate_command_injection`, `validate_path_traversal`, `validate_xss_reflection`, `validate_open_redirect`, `validate_ssrf_oob`, `confirm_oob_callback`, `validate_xxe`, `validate_auth_bypass`, `validate_idor`, `validate_finding`, `generate_validation_report` |
+| `reasoning` | 8 | **Biliş/beyin katmanı:** `deep_think` (bayrak gemisi), `plan_attack_tree` (Bayesçi EV + ToT), `next_best_action`, `reason_reflexion` (actor↔critic self-correct), `critic_review`, `record_lesson`, `recall_lessons`, `lesson_stats` (kalıcı öğrenme → planlayıcı priors'ı günceller) |
 | `ad-tools` | 12 | Kerberos (AS-REP roast/Kerberoast), SMB/NTLM enum, BloodHound veri toplama, lateral movement |
 | `memory-server` | 10 | `store_finding`, `store_credential`, `store_endpoint`, `query_attack_paths`, `suggest_next_action`, `add_relationship` |
 | `container-tools` | 10 | Container escape, K8s RBAC escalation, secret dump, privileged pod, Helm chart analizi |
@@ -434,15 +465,16 @@ Her hedef/challenge için:
 
 1. **Scope doğrula** — Scope Guard kurallarına uy
 2. **Görevi sınıflandır** → `Skill` tool veya `/skill-name` slash ile tetikle
-3. **OODA: Observe** — memory'den geçmiş bulguları çek (`query_attack_paths`)
-4. **Keşif** (passive → active, `recon-enumeration`)
-5. **Enumeration** ile yüzeyi genişlet
-6. **Zafiyet analizi** (`web-exploit` veya `web-advanced`; `qwen_analyze` delegation)
-7. **Doğrula** (`exploit-validation` + `mcp__validator__validate_*`) — yalnızca CONFIRMED bulgular ilerler
-8. **En yüksek impact'li exploit** (`web-exploit` + `generate_exploit_poc`)
-9. **Post-exploit + evidence**
-10. **Memory'e kaydet** + `telemetry` ile maliyet özet
-11. **Rapor** (`report-generator` + `generate_validation_report` kanıt ekleri)
+3. **DERİN DÜŞÜN** (karmaşık/belirsiz görev) → `mcp__reasoning__deep_think` (recall_lessons + plan + reflexion)
+4. **OODA: Observe** — memory'den geçmiş bulguları çek (`query_attack_paths`, `next_best_action`)
+5. **Keşif** (passive → active, `recon-enumeration`)
+6. **Enumeration** ile yüzeyi genişlet
+7. **Zafiyet analizi** (`web-exploit` veya `web-advanced`; `qwen_analyze` delegation)
+8. **Doğrula** (`exploit-validation` + `mcp__validator__validate_*`) — yalnızca CONFIRMED bulgular ilerler
+9. **En yüksek impact'li exploit** (`web-exploit` + `generate_exploit_poc`)
+10. **Post-exploit + evidence**
+11. **Öğren + kaydet** → `record_lesson` (worked=?) + `store_finding` + `telemetry` maliyet özet
+12. **Rapor** (`report-generator` + `generate_validation_report` kanıt ekleri)
 
 ---
 
@@ -484,7 +516,7 @@ $ claude -p "/web-exploit example.com sqli kontrolü yap"
 
 ```
 / tuşuna bas   → tüm skill'ler + built-in slash komutlar listelenir
-/tools         → MCP + built-in araçları listele (177 toplam)
+/tools         → MCP + built-in araçları listele (185 toplam)
 /health        → MCP server sağlık kontrolü
 /cost          → Session maliyet özeti
 /compact       → Context'i küçült (uzun session için)

@@ -35,6 +35,44 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — Reasoning Beyni: güçlü LLM çekirdeği (Reflexion + Bayesçi plan + öğrenme)
+
+**Kullanıcı seçimi:** 1a (Reflexion) + 1d (saldırı planlama motoru) + 1e (kalıcı öğrenme),
+tam otonomi önceliği. Amaç: ajanın "düşünme" gücünü tek session modelinden çok-pilarlı
+bir biliş katmanına taşımak.
+
+**Yeni `mcp-reasoning` (13. server, 8 tool) — üç pilar birbirini besler:**
+- **1a Reflexion:** `reason_reflexion` (actor→critic→retry; actor=CCO_REASON_MODEL,
+  critic=CCO_CRITIC_MODEL farklı → daha sert eleştiri), `critic_review`. Halüsinasyonu
+  düşürür; onaydan sonra validator'a bağlanır.
+- **1d Bayesçi planlama:** `plan_attack_tree` (memory'deki findings/endpoints'i okur,
+  her vektörü EV = blended_prob × impact × (1−0.4·effort) ile puanlar + LLM varsa
+  tree-of-thought zinciri), `next_best_action` (tek en yüksek-EV aksiyon, deterministik).
+  Her aksiyon `validate_with` (validator) + `recommended_tool` ile döner.
+- **1e Kalıcı öğrenme:** `record_lesson`/`recall_lessons`/`lesson_stats` (`~/.cco/lessons.db`).
+  Öğrenilen win-rate'ler `_blended_prob` ile planlayıcının Bayesçi önceliklerine
+  pseudo-count'lu karışır → **altın döngü:** deep_think→validate→exploit→record_lesson→
+  priors güncellenir → zamanla akıllanır.
+- **⚡ `deep_think` (bayrak gemisi):** recall_lessons + plan_attack_tree + reason_reflexion'ı
+  tek çağrıda birleştirir; deneyimle beslenmiş, kendini-eleştirmiş, validator-bağlı
+  aksiyon planı döndürür.
+
+**Tasarım notları:** LLM yoksa EV/öğrenme/plan tamamen offline çalışır (graceful).
+Modeller env ile güçlendirilebilir (CCO_REASON_MODEL/CCO_CRITIC_MODEL; OpenRouter'da
+gpt-oss-120b/deepseek-v4'e override edilebilir — web araştırmasıyla önerildi).
+Endpoint-hint çıkarımı RCE'yi spekülatif üretmeyecek şekilde sıkılaştırıldı.
+
+**Entegrasyon:** CLAUDE.md **Kural 6 (önce deep_think)** + öncelik sırası adım 3 + ekosistem
+tablosu. Yeni skill `deep-reasoning` (22. skill). Profillere reasoning eklendi (min/recon/
+web/ctf/ad/full). cco-profile.sh, token-estimate.py, install-cco.sh, README güncellendi →
+**12→13 server, 200→208 tool, 21→22 skill.**
+
+**Doğrulama:** ✅ `pytest -q` → **65 passed, 1 skipped** (test_reasoning: EV sıralaması,
+öğrenme döngüsünün prior'ı güncellemesi, recall relevance, deep_think offline pilar birleşimi,
+reflexion graceful-without-key). ✅ Offline deep_think demo: SSTI/SQLi/login seed → EV ile
+sıraladı, sql_injection seçti, `validate_sqli` hook'una bağladı.
+
+
 ### 2026-06-14 — Deterministik Validator (XBOW-tarzı) + XBOW Benchmark Harness
 
 **Tetik:** Kullanıcı CCO'yu XBOW ile kıyasladı. İki en büyük açık tespit edildi:
