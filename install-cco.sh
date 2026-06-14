@@ -1,7 +1,7 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
 #   🔴 CCO — Claude Code Offensive Operator
-#   Kali Linux + OpenRouter + 11 MCP Server — Tek Komut Kurulum
+#   Kali Linux + OpenRouter + 12 MCP Server — Tek Komut Kurulum
 # ═══════════════════════════════════════════════════════════════
 # Kullanım:
 #   git clone https://github.com/EmreMetin00007/AgentCracker.git cco
@@ -15,7 +15,7 @@
 #   3. Claude Code CLI'ı kurar (npm -g @anthropic-ai/claude-code)
 #   4. ~/.cco veri dizinini oluşturur
 #   5. OpenRouter API key'ini .env dosyasına kaydeder
-#   6. ~/.claude.json'a 11 MCP server'ı kaydeder (mevcut dosya yedeklenir)
+#   6. ~/.claude.json'a 12 MCP server'ı kaydeder (mevcut dosya yedeklenir)
 #   7. system_prompt.md → CLAUDE.md'ye kopyalar (yoksa)
 
 set -e
@@ -284,13 +284,18 @@ mcp_servers = {
         "command": "python3",
         "args": ["$CCO_DIR/mcp-servers/mcp-llm-security/server.py"],
         "env": {"CCO_HOME": "$CCO_DATA_DIR"}
+    },
+    "validator": {
+        "command": "python3",
+        "args": ["$CCO_DIR/mcp-servers/mcp-validator/server.py"],
+        "env": {"CCO_HOME": "$CCO_DATA_DIR"}
     }
 }
 
 existing["mcpServers"] = mcp_servers
 with open(path, "w") as f:
     json.dump(existing, f, indent=2)
-print(f"  ✓ 11 MCP server kaydedildi → {path}")
+print(f"  ✓ 12 MCP server kaydedildi → {path}")
 PYEOF
 
 if [ "$EUID" -eq 0 ] && [ "$REAL_USER" != "root" ]; then
@@ -310,7 +315,7 @@ fi
 
 # Test importları
 echo -e "${C}  → MCP server import testleri...${N}"
-for srv in kali-tools memory-server telemetry rag-engine ctf-platform web-advanced ad-tools container-tools osint-tools browser llm-security; do
+for srv in kali-tools memory-server telemetry rag-engine ctf-platform web-advanced ad-tools container-tools osint-tools browser llm-security validator; do
   pyfile="$CCO_DIR/mcp-servers/mcp-$srv/server.py"
   if [ -f "$pyfile" ]; then
     if python3 -c "

@@ -1,0 +1,9 @@
+{
+  "id": "XBEN-MOCK-001",
+  "name": "Blog Search SQLi",
+  "level": 1,
+  "tags": ["SQLi"],
+  "description": "Mock SQL injection challenge for harness self-test.",
+  "target": "mock://xben-mock-001/search?q=",
+  "port": 0
+}

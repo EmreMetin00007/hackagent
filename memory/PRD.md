@@ -35,6 +35,47 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — Deterministik Validator (XBOW-tarzı) + XBOW Benchmark Harness
+
+**Tetik:** Kullanıcı CCO'yu XBOW ile kıyasladı. İki en büyük açık tespit edildi:
+(1) deterministik exploit doğrulama yok, (2) bağımsız/kıyaslanabilir benchmark kanıtı
+yok. Kullanıcı her ikisini de eklemeyi istedi.
+
+**1. `mcp-validator` (yeni 12. server, 13 tool) — "yaratıcı AI keşfeder, mantık doğrular":**
+- Bir bulgunun GERÇEKTEN exploit edilebilir olduğunu LLM görüşü değil, nesnel
+  oracle'larla deterministik kanıtlar. Tool'lar: `validate_sqli` (differential
+  boolean + error + time), `validate_ssti` (rastgele a*b aritmetik oracle),
+  `validate_command_injection` (echo-token + statistical timing), `validate_path_traversal`
+  + `validate_xxe` (/etc/passwd & win.ini içerik imzası), `validate_xss_reflection`
+  (kaçışsız yansıma; execution→browser_dom_xss), `validate_open_redirect` (Location host),
+  `validate_ssrf_oob` + `confirm_oob_callback` (interactsh OOB token korelasyonu),
+  `validate_auth_bypass` + `validate_idor` (differential), `validate_finding` (dispatcher),
+  `generate_validation_report` (XBOW-tarzı Markdown PoC kanıt raporu).
+- Confidence oracle gücüne göre deterministik atanır (oob 0.99 → unescaped_reflection 0.75).
+  Her doğrulama `~/.cco/validations/` altına reproducible audit-trail olarak yazılır.
+- CLAUDE.md'ye **Kural 5 (exploit doğrulama / false-positive guard)** + kill-chain
+  faz 3.5 + öncelik sırası adım 7 eklendi. Yeni skill `exploit-validation` (21. skill).
+
+**2. XBOW Benchmark Harness (`scripts/xbow_benchmark.py`):**
+- CCO'yu XBOW'un 104-challenge public benchmark'ına (github.com/xbow-engineering/
+  validation-benchmarks) karşı çalıştırır; başarı = gerçek flag (yalnızca tespit değil).
+- Subcommand'lar: `list / run / score / up / down`. Pluggable Runtime (DockerRuntime |
+  MockRuntime) + Solver (CCOSolver `claude -p` | MockSolver). Flag oracle (regex),
+  kategori/level pass-rate, maliyet/süre, XBOW & arXiv:2508.20816 referans kıyası,
+  Markdown scorecard (`~/.cco/benchmark/scorecard.md`).
+- Offline `--mock` modu + 4 gömülü fixture (`scripts/xbow_bench_fixtures/`, 3 solvable/
+  1 negatif) → harness uçtan uca doğrulanabilir. Metodoloji: `workflows/benchmark-workflow.md`.
+
+**Profiller/sayımlar:** `web` ve `ctf` profillerine + `full`'a validator eklendi.
+cco-profile.sh, token-estimate.py, install-cco.sh (~/.claude.json kaydı + import loop),
+README, CLAUDE.md güncellendi → **11→12 server, 187→200 tool, 20→21 skill, 4→5 workflow**.
+
+**Doğrulama:** ✅ `pytest -q` → **53 passed, 1 skipped** (test_mcp_servers 200-tool guard,
+test_validator 7 oracle/dispatcher/report testi, test_xbow_benchmark 6 harness testi).
+✅ `xbow_benchmark.py run --all --mock` → 3/4 (%75) doğru skorladı. ✅ validator 13 tool
+listeleniyor, FastMCP import temiz.
+
+
 
 ### 2026-01-24 — pytest Smoke Suite + Token Tasarrufu (MCP Profilleri)
 

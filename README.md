@@ -1,8 +1,8 @@
 # 🔴 CCO — Claude Code Offensive Operator
 
 > Otonom bug bounty avcısı & CTF çözücü. **Claude Code CLI** orkestrasyonu,
-> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **11 MCP server** ile 187
-> güvenlik aracı. Kali Linux için.
+> **OpenRouter** üzerinden ucuz/sansürsüz modeller, **12 MCP server** ile 200
+> güvenlik aracı (deterministik exploit **validator** dahil). Kali Linux için.
 
 **v3.1 HackerAgent → v2.0 CCO geçişi:** 4.327 satır Python orkestrasyon kodu
 silindi; tüm orkestrasyon Claude Code'a bırakıldı. Sadece MCP tool'lar, skills,
@@ -26,7 +26,7 @@ chmod +x install-cco.sh
 - ✅ Claude Code CLI kurulumu (npm -g @anthropic-ai/claude-code)
 - ✅ `~/.cco/` veri dizini (DB, loglar, RAG, approvals)
 - ✅ `.env` dosyası (OpenRouter yönlendirmesi)
-- ✅ `~/.claude.json` — 11 MCP server kaydı (mevcut dosya yedeklenir)
+- ✅ `~/.claude.json` — 12 MCP server kaydı (mevcut dosya yedeklenir)
 - ✅ (opsiyonel) RAG bilgi tabanını CVE/ExploitDB/payload ile doldurma
 
 ---
@@ -70,17 +70,18 @@ handle edilir ve modelden bağımsız olarak her zaman skill'i tetikler.
 │         Claude Code CLI                     │
 │  • Orkestrasyon, OODA loop, tool routing    │
 │  • CLAUDE.md → hacker persona + metodoloji  │
-│  • ~/.claude.json → 11 MCP server kaydı     │
+│  • ~/.claude.json → 12 MCP server kaydı     │
 └──────┬──────────────┬───────────────────────┘
        │              │
        ▼              ▼
 ┌────────────┐  ┌─────────────────────────────────┐
-│ OpenRouter │  │      MCP Server'lar (11)        │
+│ OpenRouter │  │      MCP Server'lar (12)        │
 │   API      │  │  ┌──────────────────────────┐   │
 │            │  │  │ mcp-kali-tools  (76 tool) │   │
 │ Session:   │  │  │ mcp-web-advanced (25 tool)│   │
 │ qwen3-next │  │  │ mcp-ctf-platform (14 tool)│   │
-│ 80b-a3b    │  │  │ mcp-ad-tools    (12 tool) │   │
+│ 80b-a3b    │  │  │ mcp-validator   (13 tool) │   │
+│            │  │  │ mcp-ad-tools    (12 tool) │   │
 │            │  │  │ mcp-memory-srv  (10 tool) │   │
 │ Tool içi:  │  │  │ mcp-container   (10 tool) │   │
 │ qwen3.6+,  │  │  │ mcp-osint-tools  (9 tool) │   │
@@ -126,10 +127,11 @@ cco/
 ├── install-cco.sh               ← Tek komut kurulum
 ├── README.md
 │
-├── mcp-servers/                 ← 11 MCP server (187 tool)
+├── mcp-servers/                 ← 12 MCP server (200 tool)
 │   ├── mcp-kali-tools/          ← 76 güvenlik aracı + LLM tools
 │   ├── mcp-web-advanced/        ← 25 modern web/API saldırı aracı
 │   ├── mcp-ctf-platform/        ← 14 — CTFd/HTB/THM entegrasyonu
+│   ├── mcp-validator/           ← 13 — DETERMİNİSTİK exploit doğrulama (XBOW-tarzı)
 │   ├── mcp-ad-tools/            ← 12 — Active Directory / Kerberos / SMB
 │   ├── mcp-memory-server/       ← 10 — NetworkX Knowledge Graph + SQLite
 │   ├── mcp-container-tools/     ← 10 — Docker/K8s container security
@@ -143,9 +145,10 @@ cco/
 │   ├── commands/                ← Custom slash command'lar
 │   │   ├── pwn.md               ←   /pwn <hedef> — otonom recon→exploit zinciri
 │   │   └── bugbounty.md         ←   /bugbounty <hedef> — bug bounty kampanyası
-│   └── skills/                  ← 20 Agent Skill (YAML frontmatter ile)
+│   └── skills/                  ← 21 Agent Skill (YAML frontmatter ile)
 │       ├── recon-enumeration/  attack-surface-mapping/  llm-security/
 │       ├── web-exploit/  web-advanced/  advanced-api-sec/
+│       ├── exploit-validation/ ← deterministik doğrulama metodolojisi
 │       ├── binary-pwn/  crypto-forensics/  ctf-solver/
 │       ├── report-generator/  source-code-review/
 │       ├── active-directory/  windows-exploitation/
@@ -160,6 +163,7 @@ cco/
 │   ├── bug-bounty-workflow.md
 │   ├── ctf-workflow.md
 │   ├── modern-web-workflow.md
+│   ├── benchmark-workflow.md    ← CCO'yu XBOW benchmark'ına karşı çalıştır
 │   └── supervisor-workflow.md
 │
 ├── rules/                       ← Güvenlik kuralları
@@ -168,11 +172,15 @@ cco/
 │
 ├── tests/                       ← pytest smoke/regresyon suite
 │   ├── conftest.py
-│   └── test_mcp_servers.py      ← 11 server import + 187 tool sayım guard
+│   ├── test_mcp_servers.py      ← 12 server import + 200 tool sayım guard
+│   ├── test_validator.py        ← deterministik validator oracle testleri
+│   └── test_xbow_benchmark.py   ← benchmark harness (mock) testleri
 │
 ├── scripts/                     ← Yardımcılar
 │   ├── cco-profile.sh           ← MCP profil değiştir (TOKEN TASARRUFU)
 │   ├── token-estimate.py        ← Profil token maliyeti tablosu
+│   ├── xbow_benchmark.py        ← XBOW 104-challenge benchmark harness
+│   ├── xbow_bench_fixtures/     ← offline mock benchmark seti (harness testi)
 │   ├── rag-bootstrap.py/.sh     ← RAG bilgi tabanı doldurma
 │   ├── recon_daemon.py          ← (kali-tools'a wired)
 │   ├── swarm_orchestrator.py    ← (kali-tools'a wired)
@@ -185,13 +193,14 @@ cco/
 
 ---
 
-## ⚙️ 11 MCP Server — 187 Tool
+## ⚙️ 12 MCP Server — 200 Tool
 
 | Server | Tool | Öne Çıkanlar |
 |--------|---|--------------|
 | `kali-tools` | 76 | `nmap_scan_structured`, `sqlmap_test_structured`, `ffuf`, `nuclei`, `hydra`, `qwen_analyze`, `generate_exploit_poc`, `parallel_llm_analyze`, `swarm_dispatch`, `interactsh_*` |
 | `web-advanced` | 25 | GraphQL injection, JWT attacks, OAuth/SAML, HTTP smuggling, cache poisoning, prototype pollution, WebSocket fuzz, IDOR matrix, `generate_stealth_curl` |
 | `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
+| `validator` 🆕 | 13 | **Deterministik exploit doğrulama (XBOW-tarzı):** `validate_sqli` (differential boolean), `validate_ssti` (aritmetik oracle), `validate_command_injection` (echo+timing), `validate_path_traversal`, `validate_xss_reflection`, `validate_open_redirect`, `validate_ssrf_oob`+`confirm_oob_callback` (OOB), `validate_xxe`, `validate_auth_bypass`, `validate_idor`, `validate_finding`, `generate_validation_report` |
 | `ad-tools` | 12 | Kerberos (AS-REP/Kerberoast), SMB enum, NTLM, BloodHound veri toplama |
 | `memory-server` | 10 | `store_finding`, `store_credential`, `query_attack_paths`, `suggest_next_action` |
 | `container-tools` | 10 | Container escape, K8s RBAC, secret dump, privileged pod, Helm analizi |
@@ -201,37 +210,70 @@ cco/
 | `rag-engine` | 7 | `rag_search`, `rag_similar_exploits`, `rag_ingest_cve`, `rag_ingest_exploitdb`, `rag_ingest_writeup`, `rag_bulk_ingest`, `rag_stats` (ChromaDB) |
 | `llm-security` | 6 | `llm_prompt_injection_probe`, `llm_system_prompt_leak`, `llm_jailbreak_test`, `llm_data_leak_probe`, `generate_injection_payloads`, `llm_owasp_top10_checklist` (OWASP LLM Top 10) |
 
-> Not: 11 server'ın tamamı `install-cco.sh` tarafından `~/.claude.json`'a
+> Not: 12 server'ın tamamı `install-cco.sh` tarafından `~/.claude.json`'a
 > otomatik kaydedilir. `browser` Playwright gerektirir (opsiyonel; yoksa net
 > hata mesajı döner). `rag-engine` ilk kullanımda boştur — install sırasında
 > (veya `python3 scripts/rag-bootstrap.py` ile) CVE/ExploitDB/payload ile doldurulur.
 
 ---
 
+## 🧪 Deterministik Validator (XBOW-tarzı) + Benchmark 🆕
+
+CCO'nun XBOW'a karşı en büyük açığı **deterministik doğrulama** ve **bağımsız
+kıyas kanıtıydı**. v3.2 bunu iki parçayla kapatır:
+
+**1) `mcp-validator` — "yaratıcı AI keşfeder, mantık doğrular".** Bir bulgunun
+*gerçekten* exploit edilebilir olduğunu LLM görüşü değil, **nesnel oracle'larla**
+kanıtlar (differential boolean SQLi, aritmetik SSTI, echo-token/timing cmdi,
+dosya-imzası LFI/XXE, OOB korelasyonu SSRF, Location-header open redirect...).
+Her doğrulama `~/.cco/validations/` altına **reproducible audit-trail** olarak yazılır.
+
+```
+# Recon/exploit sırasında bir şüphe → doğrula → CONFIRMED ise raporla
+mcp__validator__validate_sqli(target_url="http://t/item?id=1", param="id")
+mcp__validator__validate_finding(vuln_type="ssti", target_url=..., params_json='{"param":"name"}')
+mcp__validator__generate_validation_report(result_json=...)   # XBOW-tarzı PoC raporu
+```
+
+**2) XBOW Benchmark Harness** — CCO'yu XBOW'un 104-challenge public benchmark'ına
+karşı çalıştırıp skorlar (başarı = gerçek flag, yalnızca "tespit" değil):
+
+```bash
+python3 scripts/xbow_benchmark.py list  --mock              # gömülü mock seti (offline)
+python3 scripts/xbow_benchmark.py run   --all --mock        # harness mantığı testi
+python3 scripts/xbow_benchmark.py list  --repo ~/xbow-benchmarks   # gerçek 104 challenge
+python3 scripts/xbow_benchmark.py run   --all --repo ~/xbow-benchmarks --timeout 1200
+python3 scripts/xbow_benchmark.py score                     # kategori/level scorecard + XBOW kıyas
+```
+
+Detaylı metodoloji: `workflows/benchmark-workflow.md`.
+
+---
+
 ## 💸 Token Tasarrufu — MCP Profilleri
 
 Claude Code **her istekte tüm kayıtlı MCP server'ların tool şemalarını** context'e
-yükler — 11 server / 187 tool ≈ **~28K token/istek** (sadece şema). Göreve göre
-yalnızca ilgili server'ları yükleyerek istek başına 10-20K token tasarruf edilir.
+yükler — 12 server / 200 tool ≈ **~30.5K token/istek** (sadece şema). Göreve göre
+yalnızca ilgili server'ları yükleyerek istek başına 10-22K token tasarruf edilir.
 
 ```bash
 bash scripts/cco-profile.sh list      # profilleri + tahmini maliyeti gör
-bash scripts/cco-profile.sh llm       # sadece LLM-sec görevine geç (~8K, %71↓)
-bash scripts/cco-profile.sh recon     # keşif görevi (~17K, %37↓)
-bash scripts/cco-profile.sh full      # 11 server (varsayılan)
+bash scripts/cco-profile.sh llm       # sadece LLM-sec görevine geç (~8K, %73↓)
+bash scripts/cco-profile.sh web       # web + validator görevi (~24K, %21↓)
+bash scripts/cco-profile.sh full      # 12 server (varsayılan)
 python3 scripts/token-estimate.py     # server + profil token tablosu
 python3 scripts/token-estimate.py --current   # aktif profilin maliyeti
 ```
 
 | Profil | Server | Tool | ~token/istek | Tasarruf |
 |--------|---|---|---|---|
-| `llm`   | 5 | 59 | ~8.2K  | **%71** |
-| `min`   | 3 | 95 | ~14.7K | %47 |
-| `ctf`   | 5 | 116 | ~17.3K | %38 |
-| `recon` | 5 | 113 | ~17.4K | %37 |
-| `ad`    | 5 | 117 | ~18.2K | %34 |
-| `web`   | 7 | 142 | ~21.2K | %24 |
-| `full`  | 11 | 187 | ~27.8K | %0 |
+| `llm`   | 5 | 59 | ~8.2K  | **%73** |
+| `min`   | 3 | 95 | ~14.7K | %52 |
+| `recon` | 5 | 113 | ~17.4K | %43 |
+| `ctf`   | 6 | 129 | ~20.0K | %34 |
+| `ad`    | 5 | 117 | ~18.2K | %40 |
+| `web`   | 8 | 155 | ~23.9K | %21 |
+| `full`  | 12 | 200 | ~30.5K | %0 |
 
 > Profil değişikliği **yeni bir `claude` oturumunda** etkili olur. Mevcut config
 > (doldurulmuş token'lar dahil) korunur; yalnızca `mcpServers` alanı güncellenir.
@@ -243,12 +285,13 @@ python3 scripts/token-estimate.py --current   # aktif profilin maliyeti
 
 ```bash
 pip install pytest
-pytest -q                    # 11 server import + 187 tool sayım guard'ı
+pytest -q                    # 12 server import + 200 tool sayım guard'ı + validator + benchmark
 ```
 
 `tests/test_mcp_servers.py` her server'ı import eder, tool sayısını doğrular
 (yeni tool eklerken `EXPECTED_TOOL_COUNTS` güncellenmeli) ve metadata + pure-function
-temel çağrılarını test eder. Tamamen offline çalışır.
+temel çağrılarını test eder. `tests/test_validator.py` deterministik oracle'ları,
+`tests/test_xbow_benchmark.py` benchmark harness'ını (mock) doğrular. Tamamen offline çalışır.
 
 ---
 
@@ -278,7 +321,7 @@ CCO_HOME=~/.cco
 ```
 
 ### `~/.claude.json` (install-cco.sh tarafından oluşturulur)
-11 MCP server'ın command/args/env tanımları. Mevcut dosya yedeklenir, sadece
+12 MCP server'ın command/args/env tanımları. Mevcut dosya yedeklenir, sadece
 `mcpServers` alanı güncellenir.
 
 ---
@@ -319,4 +362,4 @@ Bu sistem **yalnızca yasal ve etik** güvenlik testi amaçlarıyla kullanılmal
 ---
 
 *Developed for ethical security research and CTF competitions.*
-*4.327 lines of Python orchestration → 0. MCP tools: 187 (11 server). Skills: 20. Model choices: unlimited.*
+*4.327 lines of Python orchestration → 0. MCP tools: 200 (12 server, deterministik validator dahil). Skills: 21. XBOW benchmark harness dahil. Model choices: unlimited.*

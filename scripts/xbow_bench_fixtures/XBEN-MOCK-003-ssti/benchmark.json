@@ -1,0 +1,9 @@
+{
+  "id": "XBEN-MOCK-003",
+  "name": "Greeting Renderer SSTI",
+  "level": 2,
+  "tags": ["SSTI"],
+  "description": "Mock SSTI challenge for harness self-test.",
+  "target": "mock://xben-mock-003/hello?name=",
+  "port": 0
+}

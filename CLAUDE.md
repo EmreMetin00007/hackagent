@@ -26,6 +26,7 @@ Skill({"skill": "attack-surface-mapping"}) # Pasif OSINT + client-side recon
 Skill({"skill": "web-exploit"})            # SQLi/XSS/SSRF/LFI/SSTI/XXE/IDOR
 Skill({"skill": "web-advanced"})           # GraphQL/JWT/OAuth/smuggling
 Skill({"skill": "advanced-api-sec"})       # GraphQL/gRPC/REST/JWT derin API
+Skill({"skill": "exploit-validation"})     # Deterministik exploit doğrulama (validator)
 Skill({"skill": "llm-security"})            # Prompt injection/jailbreak/OWASP LLM
 Skill({"skill": "binary-pwn"})             # BOF/ROP/RE/pwn
 Skill({"skill": "crypto-forensics"})       # Hash/stego/PCAP/Volatility
@@ -93,6 +94,33 @@ mcp__kali-tools__parallel_llm_analyze(target, data, ...)
   → Qwen + Hermes paralel (analiz + PoC birlikte)
 ```
 
+### Kural 5 — Exploit DOĞRULAMA (false-positive guard, XBOW-tarzı)
+
+> İlke: *"Yaratıcı AI keşfeder, mantık doğrular."* Bir zafiyet, deterministik
+> bir oracle ile kanıtlanana kadar **hipotezdir**. Scanner/`qwen_analyze`
+> "muhtemel SQLi" der; sen `mcp-validator` ile **kanıtlarsın**.
+
+Bir zafiyet bulduğunda, RAPORLAMADAN ve exploit'i derinleştirmeden ÖNCE
+deterministik validator ile doğrula (LLM görüşü değil — ölçülebilir kanıt):
+
+```
+mcp__validator__validate_sqli(target_url, param, method, headers_json)        # differential boolean + error + time
+mcp__validator__validate_ssti(target_url, param, ...)                         # aritmetik a*b oracle
+mcp__validator__validate_command_injection(target_url, param, ...)            # echo token + statistical timing
+mcp__validator__validate_path_traversal / validate_xxe                        # /etc/passwd içerik imzası
+mcp__validator__validate_xss_reflection(target_url, param, ...)               # kaçışsız yansıma (execution → browser_dom_xss)
+mcp__validator__validate_open_redirect / validate_auth_bypass / validate_idor # Location/differential
+mcp__validator__validate_ssrf_oob(target_url, oob_domain, ...)               # OOB token göm → interactsh_poll
+mcp__validator__confirm_oob_callback(token, poll_output)                      # callback'i deterministik korele
+mcp__validator__validate_finding(vuln_type, target_url, params_json)         # genel yönlendirici
+mcp__validator__generate_validation_report(result_json)                      # XBOW-tarzı PoC kanıt raporu
+```
+
+**Akış:** şüphe → `validate_*` → `verdict==CONFIRMED` ise `store_finding` +
+`generate_validation_report`, exploit'i derinleştir; `UNCONFIRMED` ise
+false-positive işaretle, başka vektör/encoding/WAF-bypass dene. Her doğrulama
+`~/.cco/validations/` altına reproducible audit-trail olarak yazılır.
+
 ---
 
 ## 🎯 HER GÖREV İÇİN PROTOKOL
@@ -106,6 +134,7 @@ mcp__kali-tools__parallel_llm_analyze(target, data, ...)
 | Web zafiyet (SQLi/XSS/SSRF/LFI/SSTI/XXE/IDOR/deserialization/CSRF...) | `Skill(skill="web-exploit")` veya `/web-exploit` |
 | Modern web + API (GraphQL/JWT/OAuth/SAML/smuggling/cache poisoning/WebSocket) | `Skill(skill="web-advanced")` veya `/web-advanced` |
 | Derin API güvenliği (GraphQL/gRPC/REST/JWT — T1190) | `Skill(skill="advanced-api-sec")` veya `/advanced-api-sec` |
+| Exploit DOĞRULAMA (bulguyu deterministik kanıtla — false-positive guard) | `Skill(skill="exploit-validation")` veya `/exploit-validation` |
 | AI/LLM uygulama güvenliği (prompt injection/jailbreak/system prompt leak — OWASP LLM Top 10) | `Skill(skill="llm-security")` veya `/llm-security` |
 | Binary exploit, RE, ROP, BOF, pwn, shellcode, Ghidra | `Skill(skill="binary-pwn")` veya `/binary-pwn` |
 | Kriptografi, hash crack, stego, forensics, PCAP, Volatility | `Skill(skill="crypto-forensics")` veya `/crypto-forensics` |
@@ -240,13 +269,14 @@ uygundur.
 
 ---
 
-## 🧩 MCP Araç Ekosistemi (187 tool, 11 server)
+## 🧩 MCP Araç Ekosistemi (200 tool, 12 server)
 
 | Server | Araçlar | Öne çıkanlar |
 |--------|---|--------------|
 | `kali-tools` | 76 | `nmap_scan_structured`, `sqlmap_test_structured`, `ffuf_fuzz`, `nuclei_scan`, `hydra_attack`, `qwen_analyze`, `generate_exploit_poc`, `parallel_llm_analyze`, `parallel_recon`, `swarm_dispatch`, `interactsh_*`, `request_approval` |
 | `web-advanced` | 25 | GraphQL inj., JWT saldırı, OAuth/SAML, smuggling, cache poison, prototype pollution, WebSocket fuzz, IDOR matrix, generate_stealth_curl |
 | `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
+| `validator` | 13 | **Deterministik exploit doğrulama (XBOW-tarzı):** `validate_sqli`, `validate_ssti`, `validate_command_injection`, `validate_path_traversal`, `validate_xss_reflection`, `validate_open_redirect`, `validate_ssrf_oob`, `confirm_oob_callback`, `validate_xxe`, `validate_auth_bypass`, `validate_idor`, `validate_finding`, `generate_validation_report` |
 | `ad-tools` | 12 | Kerberos (AS-REP roast/Kerberoast), SMB/NTLM enum, BloodHound veri toplama, lateral movement |
 | `memory-server` | 10 | `store_finding`, `store_credential`, `store_endpoint`, `query_attack_paths`, `suggest_next_action`, `add_relationship` |
 | `container-tools` | 10 | Container escape, K8s RBAC escalation, secret dump, privileged pod, Helm chart analizi |
@@ -277,6 +307,7 @@ loglar, approvals). `browser` Playwright opsiyonel — yoksa net hata mesajı d�
 | 1. Recon | Pasif (WHOIS/DNS/subfinder/crt.sh/Wayback) + Aktif (nmap -sC -sV -A) | `/recon-enumeration`, `parallel_recon` |
 | 2. Enum | Web (ffuf/arjun/whatweb), Servis (enum4linux/ldapsearch/snmpwalk) | `/recon-enumeration` + `mcp__kali-tools__*` |
 | 3. Vuln Analysis | 200+ zafiyet tipi, nuclei/sqlmap/nikto + LLM analiz | `/web-exploit` / `/web-advanced` + `qwen_analyze` |
+| 3.5 **Validate** | Bulguyu deterministik kanıtla (false-positive guard) | `/exploit-validation` + `mcp__validator__validate_*` |
 | 4. Exploit | PoC, RCE, shell stabilizasyonu, WAF bypass | `/web-exploit` + `generate_exploit_poc` |
 | 5. Post-Exploit | Credential harvest, persistence, priv-esc, lateral | kali-tools `shell_exec` (+ approval) |
 | 6. Report | CVSS, PoC, Impact, Remediation, Evidence | `/report-generator` |
@@ -407,10 +438,11 @@ Her hedef/challenge için:
 4. **Keşif** (passive → active, `recon-enumeration`)
 5. **Enumeration** ile yüzeyi genişlet
 6. **Zafiyet analizi** (`web-exploit` veya `web-advanced`; `qwen_analyze` delegation)
-7. **En yüksek impact'li exploit** (`web-exploit` + `generate_exploit_poc`)
-8. **Post-exploit + evidence**
-9. **Memory'e kaydet** + `telemetry` ile maliyet özet
-10. **Rapor** (`report-generator`)
+7. **Doğrula** (`exploit-validation` + `mcp__validator__validate_*`) — yalnızca CONFIRMED bulgular ilerler
+8. **En yüksek impact'li exploit** (`web-exploit` + `generate_exploit_poc`)
+9. **Post-exploit + evidence**
+10. **Memory'e kaydet** + `telemetry` ile maliyet özet
+11. **Rapor** (`report-generator` + `generate_validation_report` kanıt ekleri)
 
 ---
 
@@ -452,7 +484,7 @@ $ claude -p "/web-exploit example.com sqli kontrolü yap"
 
 ```
 / tuşuna bas   → tüm skill'ler + built-in slash komutlar listelenir
-/tools         → MCP + built-in araçları listele (164 toplam)
+/tools         → MCP + built-in araçları listele (177 toplam)
 /health        → MCP server sağlık kontrolü
 /cost          → Session maliyet özeti
 /compact       → Context'i küçült (uzun session için)

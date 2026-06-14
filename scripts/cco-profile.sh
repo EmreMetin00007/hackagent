@@ -28,11 +28,11 @@ if [ "$PROFILE" = "list" ] || [ -z "$PROFILE" ]; then
   echo -e "${C}CCO MCP Profilleri (token tasarrufu):${N}"
   echo -e "  ${G}min${N}    → kali, memory, telemetry            (~15K tok)"
   echo -e "  ${G}recon${N}  → kali, osint, browser, memory, tel  (~17K tok, %37↓)"
-  echo -e "  ${G}web${N}    → kali, web-advanced, llm-sec, browser, memory, rag, tel (~21K)"
+  echo -e "  ${G}web${N}    → kali, web-advanced, validator, llm-sec, browser, memory, rag, tel (~24K)"
   echo -e "  ${G}llm${N}    → llm-sec, browser, web-advanced, memory, tel  (~8K tok, %71↓)"
-  echo -e "  ${G}ctf${N}    → kali, ctf-platform, memory, rag, tel  (~17K tok)"
+  echo -e "  ${G}ctf${N}    → kali, ctf-platform, validator, memory, rag, tel  (~20K tok)"
   echo -e "  ${G}ad${N}     → kali, ad-tools, container, memory, tel  (~18K tok)"
-  echo -e "  ${G}full${N}   → 11 server (varsayılan)             (~28K tok)"
+  echo -e "  ${G}full${N}   → 12 server (varsayılan)             (~31K tok)"
   echo ""
   echo -e "Kullanım: ${Y}bash scripts/cco-profile.sh llm${N}"
   echo -e "Maliyet:  ${Y}python3 scripts/token-estimate.py${N}"
@@ -43,11 +43,11 @@ fi
 case "$PROFILE" in
   min)   SERVERS="kali-tools memory-server telemetry"; KALI_GROUPS="core" ;;
   recon) SERVERS="kali-tools osint-tools browser memory-server telemetry"; KALI_GROUPS="core,osint,swarm" ;;
-  web)   SERVERS="kali-tools web-advanced llm-security browser memory-server rag-engine telemetry"; KALI_GROUPS="core,web,exploit,llm,report" ;;
+  web)   SERVERS="kali-tools web-advanced validator llm-security browser memory-server rag-engine telemetry"; KALI_GROUPS="core,web,exploit,llm,report" ;;
   llm)   SERVERS="llm-security browser web-advanced memory-server telemetry"; KALI_GROUPS="" ;;
-  ctf)   SERVERS="kali-tools ctf-platform memory-server rag-engine telemetry"; KALI_GROUPS="core,web,pwn,exploit" ;;
+  ctf)   SERVERS="kali-tools ctf-platform validator memory-server rag-engine telemetry"; KALI_GROUPS="core,web,pwn,exploit" ;;
   ad)    SERVERS="kali-tools ad-tools container-tools memory-server telemetry"; KALI_GROUPS="core,ad,exploit,swarm" ;;
-  full)  SERVERS="kali-tools web-advanced ctf-platform ad-tools memory-server container-tools osint-tools telemetry browser rag-engine llm-security"; KALI_GROUPS="all" ;;
+  full)  SERVERS="kali-tools web-advanced ctf-platform validator ad-tools memory-server container-tools osint-tools telemetry browser rag-engine llm-security"; KALI_GROUPS="all" ;;
   *) echo -e "${R}Bilinmeyen profil: $PROFILE${N} (geçerli: min recon web llm ctf ad full list)"; exit 1 ;;
 esac
 

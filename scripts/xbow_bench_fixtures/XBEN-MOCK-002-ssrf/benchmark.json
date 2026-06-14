@@ -1,0 +1,9 @@
+{
+  "id": "XBEN-MOCK-002",
+  "name": "Profile Image Fetcher SSRF",
+  "level": 2,
+  "tags": ["SSRF"],
+  "description": "Mock SSRF challenge for harness self-test.",
+  "target": "mock://xben-mock-002/fetch?url=",
+  "port": 0
+}

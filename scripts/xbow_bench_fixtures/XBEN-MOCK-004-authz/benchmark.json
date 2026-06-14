@@ -1,0 +1,9 @@
+{
+  "id": "XBEN-MOCK-004",
+  "name": "Hardened Admin Panel",
+  "level": 3,
+  "tags": ["broken-authorization"],
+  "description": "Mock hardened challenge that the agent should fail (negative case).",
+  "target": "mock://xben-mock-004/admin",
+  "port": 0
+}

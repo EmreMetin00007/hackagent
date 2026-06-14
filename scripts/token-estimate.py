@@ -23,14 +23,14 @@ SERVERS_DIR = os.path.join(REPO, "mcp-servers")
 
 ALL = ["kali-tools", "web-advanced", "ctf-platform", "ad-tools", "memory-server",
        "container-tools", "osint-tools", "telemetry", "browser", "rag-engine",
-       "llm-security"]
+       "llm-security", "validator"]
 
 PROFILES = {
     "min":   ["kali-tools", "memory-server", "telemetry"],
     "recon": ["kali-tools", "osint-tools", "browser", "memory-server", "telemetry"],
-    "web":   ["kali-tools", "web-advanced", "llm-security", "browser", "memory-server", "rag-engine", "telemetry"],
+    "web":   ["kali-tools", "web-advanced", "validator", "llm-security", "browser", "memory-server", "rag-engine", "telemetry"],
     "llm":   ["llm-security", "browser", "web-advanced", "memory-server", "telemetry"],
-    "ctf":   ["kali-tools", "ctf-platform", "memory-server", "rag-engine", "telemetry"],
+    "ctf":   ["kali-tools", "ctf-platform", "validator", "memory-server", "rag-engine", "telemetry"],
     "ad":    ["kali-tools", "ad-tools", "container-tools", "memory-server", "telemetry"],
     "full":  ALL,
 }
@@ -82,7 +82,7 @@ def main():
         full_tok += c // 4
         print(f"{s:<18}{n:>5}{c // 4:>9}")
     print("-" * 32)
-    print(f"{'FULL (11 server)':<18}{sum(measured[s][0] for s in ALL):>5}{full_tok:>9}")
+    print(f"{'FULL (12 server)':<18}{sum(measured[s][0] for s in ALL):>5}{full_tok:>9}")
     print()
     print(f"{'PROFİL':<10}{'server':>7}{'tool':>6}{'~token':>9}{'tasarruf':>10}")
     print("-" * 42)

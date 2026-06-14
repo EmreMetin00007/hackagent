@@ -23,6 +23,7 @@ EXPECTED_TOOL_COUNTS = {
     "kali-tools": 76,
     "web-advanced": 25,
     "ctf-platform": 14,
+    "validator": 13,
     "ad-tools": 12,
     "memory-server": 10,
     "container-tools": 10,
@@ -34,7 +35,7 @@ EXPECTED_TOOL_COUNTS = {
 }
 
 ALL_SERVERS = sorted(EXPECTED_TOOL_COUNTS.keys())
-TOTAL_EXPECTED = sum(EXPECTED_TOOL_COUNTS.values())  # 187
+TOTAL_EXPECTED = sum(EXPECTED_TOOL_COUNTS.values())  # 200
 
 
 @pytest.mark.parametrize("server", ALL_SERVERS)
@@ -70,7 +71,7 @@ def test_tools_have_metadata(server):
 
 
 def test_total_tool_count():
-    """Toplam tool sayısı = 187 (11 server) regresyon kontrolü."""
+    """Toplam tool sayısı = 200 (12 server) regresyon kontrolü."""
     total = 0
     for server in ALL_SERVERS:
         total += len(list_tool_names(load_server(server)))
