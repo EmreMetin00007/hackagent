@@ -44,8 +44,9 @@ def test_reasoning_imports_and_tool_count():
     mod = _r()
     assert hasattr(mod, "mcp")
     names = list_tool_names(mod)
-    assert len(names) == 8, f"reasoning 8 tool sunmalı, {len(names)} bulundu"
+    assert len(names) == 13, f"reasoning 13 tool sunmalı, {len(names)} bulundu"
     assert "deep_think" in names
+    assert "compose_attack_chains" in names
 
 
 def test_normalize_tech():

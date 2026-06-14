@@ -1,6 +1,6 @@
 ---
 name: deep-reasoning
-description: "CCO'nun güçlü 'beyin' katmanı (biliş motoru). Kompleks, belirsiz veya yüksek-değerli görevlerde DERİN DÜŞÜNME yapar: ilgili geçmiş dersleri hatırlar (kalıcı öğrenme), Bayesçi beklenen-değer ile saldırı planı kurar (tree-of-thought) ve seçilen yolu Reflexion (actor→critic→validator→retry) ile kendini-düzelterek sağlamlaştırır. Bu skill'i şu durumlarda kullan: yeni bir hedefe/engagement'a başlarken; 'nereden başlamalıyım', 'en yüksek impact ne', 'sonraki adım', 'plan', 'strateji', 'düşün', 'analiz et' dendiğinde; bir exploit/PoC üretmeden önce kendini eleştirmek istediğinde; bir vektör başarısız olup strateji değiştirmen gerektiğinde. Tek kapı: deep_think. Tool sonrası daima validator ile doğrula ve record_lesson ile öğren."
+description: "CCO'nun güçlü 'beyin' katmanı (biliş motoru). Kompleks, belirsiz veya yüksek-değerli görevlerde DERİN DÜŞÜNME yapar: ilgili geçmiş dersleri hatırlar (kalıcı öğrenme), Bayesçi beklenen-değer ile saldırı planı kurar (tree-of-thought) ve seçilen yolu Reflexion (actor→critic→validator→retry) ile kendini-düzelterek sağlamlaştırır. Ayrıca: Kill-Chain Intelligence (compose_attack_chains — bulguları SSRF→IMDS→RCE gibi çok-adımlı zincirlere bağlar; büyük ödül = zincir), WAF-aware Payload Evolution (evolve_payload — bloklanınca payload evrimleştirir) ve Exploitability Score (kalibre güven, false-positive guard). Bu skill'i şu durumlarda kullan: yeni bir hedefe/engagement'a başlarken; 'nereden başlamalıyım', 'en yüksek impact ne', 'sonraki adım', 'plan', 'strateji', 'zincirle', 'chain', 'düşün', 'analiz et' dendiğinde; bir exploit/PoC üretmeden önce kendini eleştirmek istediğinde; bir payload WAF'a takılınca; bir bulgunun gerçek sömürülebilirliğini skorlarken; bir vektör başarısız olup strateji değiştirmen gerektiğinde. Tek kapı: deep_think. Tool sonrası daima validator ile doğrula ve record_lesson ile öğren."
 ---
 
 # 🧠 Derin Düşünme (Reasoning / Beyin Katmanı)
@@ -58,6 +58,43 @@ deep_think → validate (deterministik) → exploit → record_lesson(worked=?)
      ▲                                                          │
      └──────────── öğrenilen win-rate priors'ı günceller ◄──────┘
 ```
+
+## ⚡ Zeka Katmanı v2 — piyasa farklılaştırıcıları
+
+### (a) Kill-Chain Intelligence — bulguları zincirle (büyük ödül = zincir)
+```
+mcp__reasoning__compose_attack_chains(target, scope, max_depth, top_n)
+   → memory'deki bulguları deterministik ÇOK-ADIMLI kill-chain'lere bağlar:
+     SSRF→IMDS→IAM→bulut ele geçirme · LFI→log poisoning→RCE ·
+     open-redirect→OAuth token→ATO · IDOR→ATO · file_upload→webshell→RCE
+   → her zinciri EV (bileşik olasılık × yükseltilmiş impact × effort) ile sıralar
+mcp__reasoning__kill_chain_report(chain_json)   → reprodüklenebilir Markdown trace
+```
+> Tek tek orta-seviye bulgular ZİNCİRLENEREK kritik etkiye yükselir. Recon/exploit
+> sonrası `compose_attack_chains` çağır; en yüksek-EV zinciri adım adım yürü, her
+> adımı validator ile CONFIRMED yap. **Bu, büyük bounty'leri kazandıran düşünme.**
+
+### (d) WAF-aware Payload Evolution — bloklanınca evrimleş
+```
+mcp__reasoning__evolve_payload(payload, technique, blocked_by, generations, population)
+   → WAF/filtre bloğuna göre payload'ı guided mutasyonla evrimleştirir
+     (inline_comment, keyword_split, ${IFS}, tag-breakup, unicode_slash, b64_wrap...)
+mcp__reasoning__record_payload_result(technique, operators, worked, blocked_by)
+   → hangi operatör işe yaradı? öğrenir → sonraki evrimi yönlendirir (zamanla bypass↑)
+```
+> Bir payload bloklandığında pes etme — `evolve_payload` ile varyant üret, çalışan
+> varyantı `record_payload_result(worked=true)` ile kaydet.
+
+### (e) Exploitability Score — kalibre güven (false-positive guard / kanıt moat)
+```
+mcp__reasoning__exploitability_score(technique, validator_confidence, reflexion_verdict,
+                                     severity, evidence)
+   → tek kalibre skor (0-1) + band (CONFIRMED/LIKELY/POSSIBLE/UNLIKELY)
+   → validator yoksa üst sınır 0.65: deterministik doğrulama OLMADAN "CONFIRMED" deme
+```
+> Rapor/triage öncesi her bulguyu skorla. CONFIRMED yalnızca validator confidence ile
+> mümkün → false-positive'siz, yayınlanabilir kanıt.
+
 
 ## Kurallar
 - Karmaşık/belirsiz/yeni görevde **ilk çağrı `deep_think`** olmalı.

@@ -35,6 +35,40 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — Zeka Katmanı v2: Kill-Chain Intelligence + Payload Evolution + Exploitability Score
+
+**Kullanıcı seçimi:** "skill/zeka tarafını piyasayı kasıp kavuracak" 3 farklılaştırıcı,
+birlikte: (a) Attack Chain Composer, (d) WAF-aware Payload Evolution, (e) Exploitability
+Score. Hepsi mevcut reasoning/validator/memory altyapısına eklendi, tamamen deterministik
+(LLM/network gerekmez) → bu ortamda offline test edildi.
+
+**`mcp-reasoning`'e 5 yeni tool (8 → 13):**
+- **(a) `compose_attack_chains`** — memory'deki bulguları deterministik ÇOK-ADIMLI
+  kill-chain'lere bağlar (yetenek grafiği + Bayesçi EV). Örn. SSRF→IMDS→IAM→bulut
+  ele geçirme, LFI→log poisoning→RCE, IDOR→ATO, open-redirect→OAuth token→ATO.
+  Bileşik olasılık (entry blended_prob × Π edge feasibility) × yükseltilmiş impact ×
+  effort → EV ile sıralar. Tek orta-seviye bulguları KRİTİK etkiye dönüştürür
+  (büyük ödülleri kazandıran şey; HexStrike/CAI'de yok). Her adım validator hook'lu.
+- **(a) `kill_chain_report`** — bir zinciri reprodüklenebilir Markdown saldırı
+  anlatısına (adım/pivot/fizibilite/validator komutu) çevirir (XBOW-tarzı validated trace).
+- **(d) `evolve_payload`** — WAF blok sinyaline göre payload'ı guided/genetik mutasyonla
+  evrimleştirir (17 operatör: inline_comment, keyword_split, ${IFS}, tag-breakup,
+  unicode_slash...). Tekniğe göre operatör ailesi; lessons-ağırlıklı fitness.
+- **(d) `record_payload_result`** — operatör başarı oranını öğrenir (`payload_ops`
+  tablosu) → evolve_payload fitness'ına karışır (WAF'a karşı zamanla akıllanır).
+- **(e) `exploitability_score`** — validator confidence + reflexion verdict + öğrenilmiş
+  win-rate + kanıt bütünlüğü → tek kalibre skor + band (CONFIRMED/LIKELY/POSSIBLE/
+  UNLIKELY) + false-positive riski + kanıt anlatısı. Validator yoksa üst sınır 0.65
+  (deterministik doğrulama olmadan CONFIRMED iddia edilemez) → "güven" ticari moat.
+
+**Doğrulama:** ✅ `pytest -q` → **91 passed, 1 skipped** (yeni `test_reasoning_intel.py`:
+13 test — çok-adımlı zincir kompozisyonu, SSRF→cloud & LFI→RCE zincirleri, EV sıralama,
+kill-chain report, payload signal-break, öğrenmenin fitness'ı yükseltmesi, exploitability
+validator-var/yok ayrımı). ✅ Offline demo: 5 kill-chain EV ile sıralandı, payload
+'UNION' bloğunu kırdı, exploitability validator'sız 0.618'de tavanlandı + doğrulama önerdi.
+Sayaçlar: **8→13 reasoning tool, 208→213 toplam** (README/CLAUDE/test guard güncellendi).
+
+
 ### 2026-06-14 — Benchmark Harness v1.1: Kanıt Bütünlüğü (anti-cheat + reprodüksiyon)
 
 **Tetik:** Kullanıcı "benchmark bu haliyle ticari kanıt için yeterli mi?" diye sordu.
