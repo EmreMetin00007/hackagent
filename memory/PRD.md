@@ -35,6 +35,27 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — CLAUDE.md Orkestratör Kuralı + TryHackMe Deneme Rehberi
+
+**Kullanıcı isteği:** Orkestratör akışının gerçek session'da garanti tetiklenmesi için
+kural netleştir; ayrıca TryHackMe/Kali'de deneme rehberi.
+
+**Yapılanlar (doküman — kod değişmedi):**
+- **CLAUDE.md Kural 6 yeniden yazıldı:** `deep_think` artık "ZORUNLU İLK tool çağrısı"
+  olarak konumlandı; çıktının `step_0_recommended_skills.kickoff` slash-command'ı
+  "prompt'un İLK SATIRI olarak AYNEN çalıştırılmalı" (model-bağımsız garanti tetikleme).
+  step_0→step_5 orkestratör çıktısı + 6 yeni beyin tool'u listelendi.
+- **Öncelik Sırası** güncellendi: 1) scope → 2) deep_think (ilk çağrı) → 3) kickoff skill.
+- **Önerilen ilk komutlar**'a "⭐ ORKESTRATÖR-FIRST" örneği eklendi (`/deep-reasoning <IP>`).
+- **Yeni rehber:** `workflows/tryhackme-orchestrator-test.md` — iki-paslı gerçekçi akış
+  (taze hedef→recon→memory→deep_think tekrar→kill-chain→validate→score→learn), önerilen
+  THM odaları (Vulnversity/RootMe/Pickle Rick/OWASP Top 10), başarı kriteri checklist'i,
+  sorun giderme tablosu, maliyet tahmini.
+
+**Not:** Bu akış README için ilk **validator-onaylı kill-chain kanıtını** üreten akıştır.
+`pytest` etkilenmedi (98 passed, 1 skipped — yalnızca markdown değişti).
+
+
 ### 2026-06-14 — Auto-Skill Router (c) + deep_think Orkestratör Köprüsü
 
 **Kullanıcı seçimi:** (c) Auto-Skill Router + "pazarlama köprüsü": deep_think otomatik

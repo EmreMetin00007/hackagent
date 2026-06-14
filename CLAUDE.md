@@ -128,21 +128,40 @@ false-positive işaretle, başka vektör/encoding/WAF-bypass dene. Her doğrulam
 > görevde körlemesine tool çalıştırma — önce `mcp-reasoning` beynini kullan.
 
 ```
+# 1) İLK tool çağrın bu olmalı (orkestratör — tek çağrıda 6 adım):
 mcp__reasoning__deep_think(task, target, scope, context)
-  → recall_lessons (geçmişte ne işe yaradı) + plan_attack_tree (Bayesçi EV ile
-    en yüksek getirili yol) + reason_reflexion (actor↔critic self-correct)
-  → chosen_action.validate_with ile DOĞRULA → exploit → record_lesson
+  step_0_recommended_skills  → recommend_skills: HANGİ skill + "kickoff" slash-command
+  step_1_recalled_lessons    → recall_lessons: geçmişte ne işe yaradı
+  step_2_attack_plan         → plan_attack_tree: Bayesçi EV ile sıralı vektörler
+  step_2b_kill_chains        → compose_attack_chains: çok-adımlı zincirler + best_chain_report
+  step_3_chosen_action       → en yüksek-EV tek vektör (validate_with + recommended_tool)
+  step_4_reflexion           → reason_reflexion: actor↔critic self-correct
+  step_5_exploitability_preview → exploitability_score: kalibre ön-skor (validator yoksa POSSIBLE)
 ```
 
-Pilar tool'ları:
+**ZORUNLU — orkestratör akışını gerçek session'da garanti tetikle:**
+1. Karmaşık/yeni görevde **İLK tool çağrısı `deep_think`** olmalı (Skill'den bile önce).
+2. Çıktıdaki **`step_0_recommended_skills.kickoff`** bir slash-command döndürür
+   (örn. `/web-advanced 10.10.10.10`). **BU KOMUTU prompt'un İLK SATIRI olarak AYNEN
+   ÇALIŞTIR** → skill modelden bağımsız garanti tetiklenir (slash = en güvenilir yol).
+3. Sonra **`step_2b_kill_chains.best_chain`**'i yürü: her adımı `validate_with` ile
+   **DOĞRULA** → `exploitability_score`'a validator confidence'ı ver (**skorla**) →
+   band CONFIRMED ise `recommended_tool` ile exploit → bir sonraki pivota geç.
+4. Her denemeden sonra `record_lesson(worked=?)` → beyin + payload operatörleri akıllanır.
+
+Diğer beyin tool'ları (deep_think bunları zaten çağırır; tek tek de kullanılabilir):
 ```
+mcp__reasoning__recommend_skills(target, context, fingerprint)  # (c) fingerprint→/skill router
+mcp__reasoning__compose_attack_chains(target, scope)            # (a) çok-adımlı kill-chain + EV
+mcp__reasoning__kill_chain_report(chain_json)                   # (a) reprodüklenebilir Markdown trace
+mcp__reasoning__evolve_payload(payload, technique, blocked_by)  # (d) WAF bloklayınca payload evrimle
+mcp__reasoning__record_payload_result(technique, operators, worked)  # (d) operatör öğrenmesi
+mcp__reasoning__exploitability_score(technique, validator_confidence, ...)  # (e) kalibre güven
 mcp__reasoning__plan_attack_tree(target, scope)    # ToT + Bayesçi EV sıralı plan
 mcp__reasoning__next_best_action(target)           # tek en yüksek-EV aksiyon (hızlı)
 mcp__reasoning__reason_reflexion(task, target, context, artifact_kind, max_iters)
 mcp__reasoning__critic_review(artifact, kind)      # bağımsız critic (actor≠critic)
-mcp__reasoning__record_lesson(context, technique, action, outcome, worked, ...)
-mcp__reasoning__recall_lessons(context, technique, tags, k)
-mcp__reasoning__lesson_stats()
+mcp__reasoning__record_lesson(...) / recall_lessons(...) / lesson_stats()
 ```
 
 **Altın döngü:** her exploit denemesinden sonra (BAŞARI veya BAŞARISIZLIK)
@@ -469,8 +488,8 @@ Her hedef/challenge için:
 ## 🎯 Öncelik Sırası (yeni görev aldığında)
 
 1. **Scope doğrula** — Scope Guard kurallarına uy
-2. **Görevi sınıflandır** → `Skill` tool veya `/skill-name` slash ile tetikle
-3. **DERİN DÜŞÜN** (karmaşık/belirsiz görev) → `mcp__reasoning__deep_think` (recall_lessons + plan + reflexion)
+2. **DERİN DÜŞÜN (İLK ÇAĞRI)** → `mcp__reasoning__deep_think(task, target)` — karmaşık/yeni görevde Skill'den bile önce
+3. **Kickoff skill'i tetikle** → `deep_think` çıktısındaki `step_0_recommended_skills.kickoff` slash-command'ını (örn. `/web-advanced <hedef>`) prompt'un İLK SATIRI olarak AYNEN çalıştır
 4. **OODA: Observe** — memory'den geçmiş bulguları çek (`query_attack_paths`, `next_best_action`)
 5. **Keşif** (passive → active, `recon-enumeration`)
 6. **Enumeration** ile yüzeyi genişlet
@@ -498,8 +517,12 @@ Her hedef/challenge için:
 ```bash
 # İnteraktif REPL içinde
 $ claude
+# ⭐ ORKESTRATÖR-FIRST (önerilen — karmaşık/yeni hedef):
+> /deep-reasoning 10.10.11.42              # → deep_think: skill kickoff + kill-chain + skor
+#   ÇIKTIDAKİ step_0 kickoff slash-command'ını (örn. /web-advanced 10.10.11.42) SONRA çalıştır
+
 # Custom slash command'lar (.claude/commands/) — tek komutla otonom zincir:
-> /pwn hedef.com scope: hedef.com          # recon→exploit→rapor (otonom)
+> /pwn hedef.com scope: hedef.com          # recon→exploit→rapor (otonom; deep_think dahili)
 > /bugbounty hedef.com                      # bug bounty kampanyası
 # Skill slash command'lar:
 > /recon-enumeration 10.10.11.42
