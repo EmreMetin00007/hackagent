@@ -323,7 +323,7 @@ uygundur.
 
 ---
 
-## 🧩 MCP Araç Ekosistemi (214 tool, 13 server)
+## 🧩 MCP Araç Ekosistemi (218 tool, 13 server)
 
 | Server | Araçlar | Öne çıkanlar |
 |--------|---|--------------|
@@ -331,7 +331,7 @@ uygundur.
 | `web-advanced` | 25 | GraphQL inj., JWT saldırı, OAuth/SAML, smuggling, cache poison, prototype pollution, WebSocket fuzz, IDOR matrix, generate_stealth_curl |
 | `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
 | `validator` | 13 | **Deterministik exploit doğrulama (XBOW-tarzı):** `validate_sqli`, `validate_ssti`, `validate_command_injection`, `validate_path_traversal`, `validate_xss_reflection`, `validate_open_redirect`, `validate_ssrf_oob`, `confirm_oob_callback`, `validate_xxe`, `validate_auth_bypass`, `validate_idor`, `validate_finding`, `generate_validation_report` |
-| `reasoning` | 14 | **Biliş/beyin katmanı:** `deep_think` (bayrak gemisi — recon→zincir→doğrula→skorla orkestratörü), `plan_attack_tree` (Bayesçi EV + ToT), `next_best_action`, `reason_reflexion` (actor↔critic), `critic_review`, `record_lesson`, `recall_lessons`, `lesson_stats` (kalıcı öğrenme) · **Kill-Chain:** `compose_attack_chains` (SSRF→IMDS→RCE), `kill_chain_report` · **Payload Evo:** `evolve_payload` (WAF bypass), `record_payload_result` · `exploitability_score` (kalibre güven) · `recommend_skills` (fingerprint→/skill router) |
+| `reasoning` | 18 | **Biliş/beyin katmanı:** `deep_think` (bayrak gemisi — recon→zincir→doğrula→skorla orkestratörü), `plan_attack_tree` (Bayesçi EV + ToT), `next_best_action`, `reason_reflexion` (actor↔critic), `critic_review`, `record_lesson`, `recall_lessons`, `lesson_stats` (kalıcı öğrenme) · **Kill-Chain:** `compose_attack_chains` (SSRF→IMDS→RCE), `kill_chain_report` · **Payload Evo:** `evolve_payload` (WAF bypass), `record_payload_result` · `exploitability_score` (kalibre güven) · `recommend_skills` (fingerprint→/skill router) · **Reverse-Proxy + WAF:** `fingerprint_waf`, `classify_response`, `discover_origin` (CDN arkası origin IP), `adaptive_evasion_step` (kapalı-döngü evasion) |
 | `ad-tools` | 12 | Kerberos (AS-REP roast/Kerberoast), SMB/NTLM enum, BloodHound veri toplama, lateral movement |
 | `memory-server` | 10 | `store_finding`, `store_credential`, `store_endpoint`, `query_attack_paths`, `suggest_next_action`, `add_relationship` |
 | `container-tools` | 10 | Container escape, K8s RBAC escalation, secret dump, privileged pod, Helm chart analizi |
@@ -412,6 +412,22 @@ generate_stealth_curl(...)      → stealth/yavaş istek üret (ban koruması)
 api_rate_bypass_probe(...)      → hedefin rate-limit davranışını ölç
 subdomain_takeover_check        → 30+ servis dangling CNAME
 ```
+
+### WAF / Reverse-Proxy Playbook (CDN arkası hedeflerde ZORLANMA)
+> Hedef Cloudflare/Akamai/Imperva gibi bir reverse-proxy+WAF arkasındaysa, payload'a
+> körlemesine yüklenme — önce TANI, sonra mümkünse WAF'ı TÜMDEN ATLA (origin'e git).
+```
+1. fingerprint_waf(headers, body, status)   → hangi WAF? CDN mi? (advise_origin_discovery)
+2. CDN ise → discover_origin(domain, leaked_headers, historical_ips, ct_subdomains)
+   → bulunan origin IP'ye:  curl -H 'Host: domain' https://<origin_ip>/   (WAF DEVRE DIŞI)
+   → origin doğrudan erişilirse TÜM exploit'i oraya yönelt + store_endpoint
+3. Origin yoksa / on-origin WAF ise → her blokta:
+   classify_response(status, headers, body)  → waf_block? rate_limit? app_error(=geçtin)?
+   adaptive_evasion_step(payload, technique, status, headers, body, domain)
+     → evolve_payload(waf=<vendor>) WAF-aware varyantlar  → record_payload_result(worked=?)
+4. rate_limit gelirse payload YAKMA → throttle + jitter (generate_stealth_curl)
+```
+> Altın kural: **app_error/SQL-hata gövdesi = WAF'ı geçtin** (origin'e ulaştın), zincire devam.
 
 ---
 

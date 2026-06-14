@@ -35,6 +35,30 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — Reverse-Proxy + WAF Intelligence (a+b+c)
+
+**Kullanıcı problemi:** CCO özellikle reverse-proxy/CDN + WAF'lı hedeflerde zorlanıyordu
+(kör payload, origin keşfi yok, blok sınıflandırma yok). Seçim: a+b+c birlikte.
+
+**Yapılanlar (`mcp-reasoning` 14 → 18 tool; deterministik, canlı işlemler kali-tools'a delege):**
+- **(a) `fingerprint_waf`** — 12 vendor imzası (Cloudflare/Akamai/Imperva/AWS/F5/ModSecurity/
+  Sucuri/Fortiweb/Azure/Fastly...) header/cookie/blok-sayfasından tespit; vendor'a etkili
+  evasion operatörleri + CDN ise origin-keşfi önerisi.
+- **(b) `discover_origin`** — CDN/WAF arkasındaki gerçek backend IP'sini bulur: leaked-header/
+  tarihsel-DNS/CT/favicon sinyallerini sıralar, **CDN IP öneklerini eler** (Cloudflare/Fastly),
+  Host-override doğrudan-origin testleri + crt.sh/Shodan/Censys/dig canlı recon komutları üretir.
+  Origin'e doğrudan gitmek **WAF'ı tümden atlar** (bu hedeflerdeki en büyük kazanç).
+- **(c) `classify_response`** (waf_block/rate_limit/app_error/origin_reached) + **`adaptive_evasion_step`**
+  (kapalı-döngü: sınıflandır→fingerprint→`evolve_payload(waf=...)`→öğren; rate-limit'te throttle,
+  CDN'de origin baypası önerir) + **`evolve_payload` artık WAF-aware** (`waf` param → vendor'a
+  tercihli operatörleri öne alır).
+
+**Doğrulama:** ✅ `pytest -q` → **111 passed, 1 skipped** (yeni `test_reasoning_waf.py`: 13 test —
+vendor fingerprint, blok sınıflandırma, origin sıralama+CDN eleme, WAF-aware operatör
+önceliklendirme, kapalı-döngü). Demo: cloudflare tespit→origin adayı sıralandı→case_swap
+öncelikli varyantlar→adaptif döngü origin baypası önerdi. Sayaçlar: **14→18 tool, 214→218 toplam**.
+
+
 ### 2026-06-14 — CLAUDE.md Orkestratör Kuralı + TryHackMe Deneme Rehberi
 
 **Kullanıcı isteği:** Orkestratör akışının gerçek session'da garanti tetiklenmesi için
