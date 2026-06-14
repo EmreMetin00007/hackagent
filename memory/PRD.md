@@ -35,6 +35,55 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — Bug-Hunting Intelligence: `mcp-hunter` (scanner → hunter)
+
+**Kullanıcı isteği:** "Mimari olarak güçlendirme — daha çok ZEKA ve BUG BULMA etkileyecek
+yollar." (SaaS/dashboard değil; çekirdek zeka + gerçek zafiyet keşfi.)
+
+**Tespit:** Mevcut set enjeksiyon sınıfında güçlü (validator: SQLi/XSS/SSTI/cmdi/LFI/SSRF/
+XXE) ama bug bounty'de **en çok ödeyen** sınıflarda zayıftı: Broken Access Control (OWASP
+Web #1, API #1/#5 — BOLA/BFLA/IDOR), iş mantığı (fiyat/kupon/race), variant analizi
+(çoğaltma), kapsama (kaçırılan bug). Bunlar imza ile değil akıl yürütme ile bulunur.
+
+**Yapılanlar — yeni 14. server `mcp-hunter` (6 tool, tamamen deterministik çekirdek; LLM
+varsa H1/H3 zenginleşir, yoksa graceful):**
+- **H1 `predict_vulnerabilities`** — teknoloji parmak izinden (fingerprint + memory endpoint
+  tech) muhtemel zafiyet sınıflarını + CVE ailelerini DETERMİNİSTİK tahmin eder; 30+ tech
+  imza DB'si (wordpress/apache/struts/spring/laravel/graphql/jwt/s3/jenkins...), her tahmin
+  için hedefli hipotez + RAG sorgusu + validator hook + tetikleyici skill. "Körlemesine
+  tarama → stack'e özel hipotez".
+- **H2 `build_authz_matrix` + `analyze_authz_result`** — çok-kimlikli (anon/userA/userB/admin)
+  × kaynaklar **BOLA/BFLA/IDOR farksal test matrisi** (object-level vs function-level
+  sınıflama + obje id substitution + method tampering) ve **farksal ORACLE**: owner (kontrol)
+  vs attacker (test) yanıtı — aynı 2xx içerik (byte-hash eşleşmesi / paylaşılan owner
+  işaretçileri) = yetki ihlali KANITI (LLM görüşü değil, ölçülebilir; false-positive guard).
+- **H3 `generate_abuse_cases`** — parametre semantiğine göre **business-logic abuse** (fiyat/
+  miktar/rol/kupon/OTP/iş-akışı/tarih) + jenerik endpoint saldırıları (race condition, mass
+  assignment, replay, adım atlama). AI'nın tarayıcıyı ezdiği sınıf.
+- **H4 `hunt_variants`** — DOĞRULANMIŞ bir bulgudan kardeş param/endpoint (memory'den)/method/
+  content-type/injection-konumu/subdomain'de aynı sınıfı **sistematik çoğaltır** → tek bug'dan
+  sürü (bug bounty avcısının elle yaptığı çoğaltmanın otomasyonu).
+- **H5 `coverage_report`** — (endpoint × vuln-class) test edildi/edilmedi matrisi (findings +
+  lessons'tan), tamamlanma %, en değerli TEST EDİLMEMİŞ boşluklar + çekirdek grup (access_
+  control/business_logic/...) **kör nokta** uyarısı → kaçırılan bug (false-negative) guard'ı.
+
+**Entegrasyon:** CLAUDE.md **Kural 7 (bug-hunting akışı)** + protokol skill satırı + ekosistem
+tablosu (14 server/225 tool). Yeni skill `access-control-hunting` (23. skill) + reasoning
+`recommend_skills` SKILL_SIGNALS'a eklendi (additive). install-cco.sh (hunter kaydı + import
+loop), cco-profile.sh (web/recon/full'a hunter), token-estimate.py, README güncellendi.
+**13→14 server, 219→225 tool (reasoning gerçekte 19; eski doküman 218'i 1 hatalıydı, düzeltildi),
+22→23 skill.**
+
+**Doğrulama:** ✅ `pytest -q` → **132 passed, 1 skipped** (yeni `test_hunter.py`: 14 test —
+predict tech→vuln + memory okuma + bilinmeyen-stack advice, authz matrisi BOLA/BFLA/unauth
+sınıflama + id substitution, oracle hash-match CONFIRMED / 403 UNCONFIRMED / BFLA / unauth,
+abuse case price/role/race + impact sıralama, variant sibling stratejileri + EV sıralama,
+coverage gaps + kör nokta). ✅ Offline demo (Laravel/JWT/Apache hedefi): predict CVE-2021-3129
++ JWT BFLA tahmin etti; authz matrisi /admin/export→BFLA, /api/orders/{id}→BOLA üretti; oracle
+owner==attacker hash → CONFIRMED (0.92); coverage access_control/business_logic kör noktası
+işaretledi. Tüm akış network/LLM olmadan çalışıyor.
+
+
 ### 2026-06-14 — Reverse-Proxy + WAF Intelligence (a+b+c)
 
 **Kullanıcı problemi:** CCO özellikle reverse-proxy/CDN + WAF'lı hedeflerde zorlanıyordu

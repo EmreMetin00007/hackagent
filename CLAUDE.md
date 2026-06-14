@@ -27,6 +27,7 @@ Skill({"skill": "web-exploit"})            # SQLi/XSS/SSRF/LFI/SSTI/XXE/IDOR
 Skill({"skill": "web-advanced"})           # GraphQL/JWT/OAuth/smuggling
 Skill({"skill": "advanced-api-sec"})       # GraphQL/gRPC/REST/JWT derin API
 Skill({"skill": "exploit-validation"})     # Deterministik exploit doğrulama (validator)
+Skill({"skill": "access-control-hunting"}) # BOLA/BFLA/IDOR + iş mantığı (EN ÇOK ÖDEYEN sınıflar)
 Skill({"skill": "deep-reasoning"})         # Derin düşünme: plan + reflexion + öğrenme (beyin)
 Skill({"skill": "llm-security"})            # Prompt injection/jailbreak/OWASP LLM
 Skill({"skill": "binary-pwn"})             # BOF/ROP/RE/pwn
@@ -174,6 +175,37 @@ kalibre olur. **Memory'ye + lesson'a kayıt atlamak = beyin öğrenemez.**
 > `CCO_REASON_MODEL`/`CCO_CRITIC_MODEL` ile override edilebilir. Anahtarlar env/
 > `~/.cco/config.yaml`'dan okunur — asla koda gömülmez.
 
+
+### Kural 7 — BUG-HUNTING ZEKASI: tarayıcının kaçırdığı yüksek-ödüllü sınıflara yönel (`mcp-hunter`)
+
+> Enjeksiyon (SQLi/XSS/SSTI) tarayıcıların bulduğu sınıftır. **Gerçek bug bounty parası**
+> erişim kontrolü (BOLA/BFLA/IDOR = OWASP #1) ve iş mantığındadır — bunlar imza ile değil,
+> AKIL YÜRÜTME ile bulunur. `mcp-hunter` bu sınıfları deterministik matris + farksal
+> oracle'a indirger. Web/API hedefinde deep_think'ten SONRA bu akışı uygula.
+
+```
+1) TAHMİN:   mcp__hunter__predict_vulnerabilities(target, fingerprint, context)
+   → stack'e özel muhtemel sınıflar + CVE ailesi + RAG sorgusu + hangi skill/validator
+2) KAPSAMA:  mcp__hunter__coverage_report(target)
+   → (endpoint × vuln-class) test edildi/edilmedi + 'access_control'/'business_logic' KÖR NOKTASI?
+3) ERİŞİM KONTROLÜ (en yüksek ödül — OWASP API #1/#5):
+   a. mcp__hunter__build_authz_matrix(target, identities, resources, object_ids)
+      → anon/userA/userB/admin × kaynaklar BOLA/BFLA/unauth farksal test matrisi
+   b. Testleri ÇALIŞTIR (curl / web-advanced) → owner + attacker yanıtlarını topla
+   c. mcp__hunter__analyze_authz_result(test_json)
+      → owner-vs-attacker FARKSAL ORACLE: aynı 2xx içerik = yetki ihlali KANITI (FP guard)
+4) İŞ MANTIĞI: mcp__hunter__generate_abuse_cases(target, endpoint, params, context)
+   → fiyat/miktar/rol/kupon/iş-akışı/race kötüye-kullanım senaryoları
+5) ÇOĞALT:    mcp__hunter__hunt_variants(finding_type, target, param, endpoint)
+   → doğrulanan bug'ı kardeş param/endpoint/method/content-type/subdomain'de sistematik ara
+6) KAYDET:    store_finding + record_lesson(worked=?) + exploitability_score → coverage_report (% arttı mı?)
+```
+
+**Kural:** Web/API görevinde **erişim kontrolü ve iş mantığını ATLAMA** — `coverage_report`
+kör nokta gösteriyorsa önce onları kapat (en sık kaçırılan + en çok ödeyen). Her erişim
+kontrolü iddiası `analyze_authz_result` ile KANITLANMALI (LLM görüşü değil, ölçülebilir fark).
+Tetikleyici skill: `/access-control-hunting`.
+
 ---
 
 ## 🎯 HER GÖREV İÇİN PROTOKOL
@@ -188,6 +220,7 @@ kalibre olur. **Memory'ye + lesson'a kayıt atlamak = beyin öğrenemez.**
 | Modern web + API (GraphQL/JWT/OAuth/SAML/smuggling/cache poisoning/WebSocket) | `Skill(skill="web-advanced")` veya `/web-advanced` |
 | Derin API güvenliği (GraphQL/gRPC/REST/JWT — T1190) | `Skill(skill="advanced-api-sec")` veya `/advanced-api-sec` |
 | Exploit DOĞRULAMA (bulguyu deterministik kanıtla — false-positive guard) | `Skill(skill="exploit-validation")` veya `/exploit-validation` |
+| Erişim kontrolü + iş mantığı (BOLA/BFLA/IDOR, mass-assignment, fiyat/kupon/race — OWASP #1, API #1/#5) | `Skill(skill="access-control-hunting")` veya `/access-control-hunting` |
 | DERİN DÜŞÜNME / plan / strateji / sonraki adım (karmaşık/belirsiz görev) | `Skill(skill="deep-reasoning")` veya `/deep-reasoning` (→ `deep_think`) |
 | AI/LLM uygulama güvenliği (prompt injection/jailbreak/system prompt leak — OWASP LLM Top 10) | `Skill(skill="llm-security")` veya `/llm-security` |
 | Binary exploit, RE, ROP, BOF, pwn, shellcode, Ghidra | `Skill(skill="binary-pwn")` veya `/binary-pwn` |
@@ -323,7 +356,7 @@ uygundur.
 
 ---
 
-## 🧩 MCP Araç Ekosistemi (218 tool, 13 server)
+## 🧩 MCP Araç Ekosistemi (225 tool, 14 server)
 
 | Server | Araçlar | Öne çıkanlar |
 |--------|---|--------------|
@@ -331,7 +364,8 @@ uygundur.
 | `web-advanced` | 25 | GraphQL inj., JWT saldırı, OAuth/SAML, smuggling, cache poison, prototype pollution, WebSocket fuzz, IDOR matrix, generate_stealth_curl |
 | `ctf-platform` | 14 | `ctfd_list_challenges`, `htb_submit_flag`, `thm_get_room`, decode/hash yardımcıları |
 | `validator` | 13 | **Deterministik exploit doğrulama (XBOW-tarzı):** `validate_sqli`, `validate_ssti`, `validate_command_injection`, `validate_path_traversal`, `validate_xss_reflection`, `validate_open_redirect`, `validate_ssrf_oob`, `confirm_oob_callback`, `validate_xxe`, `validate_auth_bypass`, `validate_idor`, `validate_finding`, `generate_validation_report` |
-| `reasoning` | 18 | **Biliş/beyin katmanı:** `deep_think` (bayrak gemisi — recon→zincir→doğrula→skorla orkestratörü), `plan_attack_tree` (Bayesçi EV + ToT), `next_best_action`, `reason_reflexion` (actor↔critic), `critic_review`, `record_lesson`, `recall_lessons`, `lesson_stats` (kalıcı öğrenme) · **Kill-Chain:** `compose_attack_chains` (SSRF→IMDS→RCE), `kill_chain_report` · **Payload Evo:** `evolve_payload` (WAF bypass), `record_payload_result` · `exploitability_score` (kalibre güven) · `recommend_skills` (fingerprint→/skill router) · **Reverse-Proxy + WAF:** `fingerprint_waf`, `classify_response`, `discover_origin` (CDN arkası origin IP), `adaptive_evasion_step` (kapalı-döngü evasion) |
+| `reasoning` | 19 | **Biliş/beyin katmanı:** `deep_think` (bayrak gemisi — recon→zincir→doğrula→skorla orkestratörü), `plan_attack_tree` (Bayesçi EV + ToT), `next_best_action`, `reason_reflexion` (actor↔critic), `critic_review`, `record_lesson`, `recall_lessons`, `lesson_stats` (kalıcı öğrenme) · **Kill-Chain:** `compose_attack_chains` (SSRF→IMDS→RCE), `kill_chain_report` · **Payload Evo:** `evolve_payload` (WAF bypass), `record_payload_result` · `exploitability_score` (kalibre güven) · `recommend_skills` (fingerprint→/skill router) · **Reverse-Proxy + WAF:** `fingerprint_waf`, `classify_response`, `discover_origin` (CDN arkası origin IP), `adaptive_evasion_step` (kapalı-döngü evasion), `verify_origin` |
+| `hunter` 🆕 | 6 | **BUG-HUNTING ZEKASI (tarayıcıların kaçırdığı yüksek-ödüllü sınıflar):** `predict_vulnerabilities` (tech parmak izi → muhtemel sınıf + CVE ailesi + hedefli hipotez + RAG sorgusu), `build_authz_matrix` (anon/userA/userB/admin × kaynaklar **BOLA/BFLA/IDOR farksal test matrisi**), `analyze_authz_result` (owner-vs-attacker **farksal ORACLE** → yetki ihlali deterministik kanıtı), `generate_abuse_cases` (fiyat/miktar/rol/kupon/iş-akışı/race **business-logic abuse**), `hunt_variants` (doğrulanan bug'ı kardeş param/endpoint/method/subdomain'de **çoğalt**), `coverage_report` (attack-surface × vuln-class **kapsama + kör nokta = kaçırılan bug guard**) |
 | `ad-tools` | 12 | Kerberos (AS-REP roast/Kerberoast), SMB/NTLM enum, BloodHound veri toplama, lateral movement |
 | `memory-server` | 10 | `store_finding`, `store_credential`, `store_endpoint`, `query_attack_paths`, `suggest_next_action`, `add_relationship` |
 | `container-tools` | 10 | Container escape, K8s RBAC escalation, secret dump, privileged pod, Helm chart analizi |

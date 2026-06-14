@@ -32,11 +32,12 @@ EXPECTED_TOOL_COUNTS = {
     "browser": 9,
     "reasoning": 19,
     "rag-engine": 7,
+    "hunter": 6,
     "llm-security": 6,
 }
 
 ALL_SERVERS = sorted(EXPECTED_TOOL_COUNTS.keys())
-TOTAL_EXPECTED = sum(EXPECTED_TOOL_COUNTS.values())  # 218
+TOTAL_EXPECTED = sum(EXPECTED_TOOL_COUNTS.values())  # 225
 
 
 @pytest.mark.parametrize("server", ALL_SERVERS)
@@ -72,7 +73,7 @@ def test_tools_have_metadata(server):
 
 
 def test_total_tool_count():
-    """Toplam tool sayısı = 218 (13 server) regresyon kontrolü."""
+    """Toplam tool sayısı = 225 (14 server) regresyon kontrolü."""
     total = 0
     for server in ALL_SERVERS:
         total += len(list_tool_names(load_server(server)))
