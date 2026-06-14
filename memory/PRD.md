@@ -35,6 +35,40 @@ OpenRouter mimarisine migrasyonu. Hedef: silinen 4.300+ satır Python kod, korun
 7. Scope enforcement + budget tracking (telemetry MCP) aktif olmalı
 
 ## What's Been Implemented
+### 2026-06-14 — Benchmark Harness v1.1: Kanıt Bütünlüğü (anti-cheat + reprodüksiyon)
+
+**Tetik:** Kullanıcı "benchmark bu haliyle ticari kanıt için yeterli mi?" diye sordu.
+Tespit: mevcut `--mock` koşusu yalnızca harness mantığını test ediyor (skor
+`solution.json`'dan okunuyor) ve scorecard mock %75'i XBOW %76.9 ile kıyaslayıp
+**gerçek capability sanılabilecek yanıltıcı bir çerçeve** üretiyordu → ticari
+kanıt için YETERSİZ.
+
+**Yapılanlar (`scripts/xbow_benchmark.py` → v1.1, tamamen offline doğrulandı):**
+- **Anti-cheat / echo guard:** Yakalanan flag solver prompt'unda zaten varsa
+  `flag_in_input=True` → SOLVED sayılmaz (hallüsinasyon/kopya koruması).
+- **Validator-onaylı çözüm metriği:** Çıktıda `CONFIRMED`/`confidence≥0.5` izi →
+  `validator_confirmed`; scorecard "X/Y validator-onaylı" satırıyla LLM iddiasını
+  oracle kanıtından ayırır.
+- **Reprodüksiyon metadata** (`run_metadata`): mode, is_capability_evidence,
+  model, git_commit, python, host, generated → her `results.json`'a gömülür.
+  Per-challenge **transcript** (`~/.cco/benchmark/transcripts/<id>.log`).
+- **MOCK watermark:** Mock scorecard başına "SELF-TEST — YETENEK KANITI DEĞİLDİR"
+  uyarısı; XBOW delta kıyası mock modda **bastırıldı** (yalnızca docker modda gösterilir).
+- **Operasyonel (gerçek 104-run için):** `--resume` (çözülmüşleri atla),
+  `--max-cost` (toplam USD tavanı / runaway koruması), `--junit` (CI/yayın export).
+- Doküman: README benchmark bölümü + `workflows/benchmark-workflow.md` v1.1 notları.
+
+**Doğrulama:** ✅ `pytest -q` → **78 passed, 1 skipped** (yeni
+`tests/test_xbow_benchmark_integrity.py`: 10 test — echo guard, validator sayımı,
+mock watermark vs docker delta ayrımı, metadata, resume, max-cost, junit).
+✅ `run --all --mock --junit` → MOCK watermark'lı scorecard + JUnit XML + metadata üretildi.
+
+**Önemli sınır:** Gerçek capability skoru bu preview ortamında ÜRETİLEMEZ — Docker +
+`claude` CLI + OpenRouter key + `validation-benchmarks` repo gerekir (Kali host'ta).
+Harness "yayınlanabilir kanıt" seviyesine hazır; #1 ticari açık (gerçek skor kanıtı)
+için kullanıcının kendi ortamında `--repo` (docker) koşusu şart.
+
+
 ### 2026-06-14 — DeepSeek entegrasyonu (reasoning beyni için güçlü provider)
 
 **Tetik:** Kullanıcı kendi DeepSeek API anahtarını verdi; reasoning beynini güçlü bir

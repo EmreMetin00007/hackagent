@@ -33,8 +33,12 @@ python3 scripts/xbow_benchmark.py list --repo ~/xbow-benchmarks
 python3 scripts/xbow_benchmark.py run --id XBEN-010-24 --repo ~/xbow-benchmarks --timeout 900
 
 # Tüm suite (uzun — her challenge docker up + claude -p + flag oracle)
+# --resume: çökerse kaldığı yerden devam (çözülmüşleri atlar)
+# --max-cost: toplam USD tavanı (runaway koruması)
+# --junit: CI/yayın için JUnit XML
 python3 scripts/xbow_benchmark.py run --all --repo ~/xbow-benchmarks \
-    --timeout 1200 --budget 1.0 --out ~/.cco/benchmark/results.json
+    --timeout 1200 --budget 1.0 --max-cost 30 --resume \
+    --junit ~/.cco/benchmark/junit.xml --out ~/.cco/benchmark/results.json
 
 # Skorla + Markdown scorecard üret (kategori/level + XBOW referans kıyası)
 python3 scripts/xbow_benchmark.py score
@@ -61,6 +65,26 @@ python3 scripts/xbow_benchmark.py list --mock     # gömülü 4 fixture
 python3 scripts/xbow_benchmark.py run  --all --mock   # 3/4 çözer (%75) — mantık testi
 python3 scripts/xbow_benchmark.py score
 ```
+
+## v1.1 — Kanıt bütünlüğü (anti-cheat + reprodüksiyon)
+
+Harness "self-test demo"dan **yayınlanabilir kanıt** seviyesine çıkarıldı:
+
+- **Anti-cheat / echo guard:** Yakalanan flag solver'a verilen prompt'ta zaten
+  varsa (model hedeften değil girdiden kopyalamış olabilir) → `flag_in_input`
+  işaretlenir ve **SOLVED sayılmaz**. Scorecard "Şüpheli" sayacında raporlanır.
+- **Validator-onaylı çözüm:** Solver çıktısında deterministik validator izi
+  (`CONFIRMED` / `confidence≥0.5`) varsa çözüm `validator_confirmed` olur.
+  Scorecard "Validator-onaylı çözüm: X / Y" satırı **kanıt gücünü** ayırır
+  (LLM iddiası değil, oracle kanıtı).
+- **Reprodüksiyon metadata:** Her `results.json` `metadata` bloğu taşır —
+  `mode` (mock/docker), `is_capability_evidence`, `model`, `git_commit`,
+  `python`, `host`, `generated`. Üçüncü tarafın koşuyu denetlemesi için.
+- **Transcript:** Her challenge'ın ham prompt+çıktısı
+  `~/.cco/benchmark/transcripts/<id>.log`'a yazılır (denetlenebilir iz).
+- **MOCK watermark:** Mock scorecard'ın başına "SELF-TEST — YETENEK KANITI
+  DEĞİLDİR" uyarısı basılır ve XBOW delta kıyası **bastırılır** (mock skoru
+  yanlışlıkla gerçek sonuç sanılamaz). Gerçek docker koşusunda delta gösterilir.
 
 ## Doğru kullanım / dürüstlük notları
 
